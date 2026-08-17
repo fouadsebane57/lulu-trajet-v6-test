@@ -1,0 +1,16 @@
+{
+  "appId": "lu.lulutrajet.app",
+  "appName": "LULU Trajet",
+  "webDir": ".",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0B1016",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "android": {
+    "backgroundColor": "#0B1016"
+  },
+  "plugins": {
+    "Preferences": { "group": "LuluTrajet" }
+  }
+}

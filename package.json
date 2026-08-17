@@ -1,0 +1,14 @@
+{
+  "name": "lulu-trajet",
+  "version": "6.0.0",
+  "private": true,
+  "description": "Apprendre à parler luxembourgeois pendant les trajets.",
+  "type": "module",
+  "scripts": {
+    "contenu": "node scripts/build-content.mjs",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:verbose": "node --test --test-reporter=spec \"tests/*.test.mjs\"",
+    "verifier": "node scripts/verifier-livraison.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

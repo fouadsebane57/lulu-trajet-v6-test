@@ -1,0 +1,305 @@
+/* ===================================================================
+   LULU TRAJET · STYLES
+
+   Parti pris : une application d'apprentissage, pas une interface
+   d'assistant. Aucune orbe, aucun anneau, aucun scintillement.
+
+   Deux contraintes ont dicté les choix :
+
+     l'écran est lu dans une voiture à l'arrêt, souvent en pleine
+     lumière, parfois d'un coup d'œil : contraste élevé, grandes
+     tailles, peu d'éléments par écran ;
+
+     la phrase luxembourgeoise est le sujet principal de chaque écran :
+     elle est toujours l'élément le plus grand et le plus contrasté.
+
+   Palette : encre profonde, papier chaud, un seul accent ambre. Le
+   vert et le corail ne servent qu'aux états, jamais à la décoration.
+   =================================================================== */
+
+:root {
+  --encre: #0B1016;
+  --encre-2: #131C26;
+  --encre-3: #1D2833;
+  --trait: #26333F;
+
+  --papier: #F2EDE4;
+  --papier-doux: #9CACB9;
+
+  --ambre: #E0A94A;
+  --ambre-doux: rgba(224, 169, 74, 0.13);
+  --vert: #5CBE95;
+  --corail: #E08055;
+
+  --titre: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --texte: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --r: 14px;
+  --marge: 20px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  background: var(--encre);
+  color: var(--papier);
+  font-family: var(--texte);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: var(--ambre); }
+:focus-visible { outline: 2px solid var(--ambre); outline-offset: 3px; }
+[hidden] { display: none !important; }
+
+.env {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 18px) var(--marge) 120px;
+}
+
+/* ---------- En-tête ---------- */
+
+.tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 26px; }
+.marque { font-family: var(--titre); font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+.marque em { font-style: normal; color: var(--ambre); }
+.devise { font-size: 13.5px; color: var(--papier-doux); margin-top: 2px; }
+.compteur { text-align: right; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ambre); line-height: 1.7; }
+
+/* ---------- Avertissements ---------- */
+
+.avis {
+  border-left: 3px solid var(--ambre);
+  background: var(--ambre-doux);
+  padding: 13px 15px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  border-radius: 0 var(--r) var(--r) 0;
+  margin-bottom: 18px;
+}
+.avis.grave { border-color: var(--corail); background: rgba(224, 128, 85, 0.11); }
+.avis b { color: var(--papier); }
+
+/* ---------- Accueil ---------- */
+
+.reprendre {
+  width: 100%;
+  background: var(--ambre);
+  color: var(--encre);
+  font-weight: 700;
+  font-size: 17px;
+  padding: 20px;
+  border-radius: var(--r);
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.reprendre small { display: block; font-weight: 500; font-size: 13px; opacity: 0.78; }
+
+.choix { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-bottom: 11px; }
+.choix.trois { grid-template-columns: 1fr 1fr 1fr; }
+
+.bouton {
+  background: var(--encre-2);
+  border: 1px solid var(--trait);
+  border-radius: var(--r);
+  padding: 20px 16px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bouton:hover, .bouton:focus-visible { border-color: var(--ambre); }
+.bouton .b-t { font-family: var(--titre); font-size: 19px; font-weight: 700; }
+.bouton .b-d { font-size: 12.5px; color: var(--papier-doux); margin-top: 3px; line-height: 1.45; }
+.bouton[aria-pressed="true"] { border-color: var(--ambre); background: var(--ambre-doux); }
+.bouton.pleine { grid-column: 1 / -1; }
+
+/* ---------- Sections ---------- */
+
+.h { font-family: var(--titre); font-size: 22px; font-weight: 700; margin: 32px 0 12px; }
+.h:first-child { margin-top: 0; }
+.h2 { font-family: var(--titre); font-size: 17px; font-weight: 700; margin: 22px 0 8px; }
+.p { font-size: 14px; color: var(--papier-doux); line-height: 1.62; margin-bottom: 14px; }
+.p b { color: var(--papier); font-weight: 600; }
+
+/* ---------- Onglets ---------- */
+
+.ong {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; justify-content: space-around;
+  background: rgba(11, 16, 22, 0.96);
+  border-top: 1px solid var(--trait);
+  padding: 8px 4px calc(env(safe-area-inset-bottom) + 8px);
+  backdrop-filter: blur(12px);
+}
+.ong button {
+  flex: 1; padding: 7px 2px; font-size: 10.5px; letter-spacing: 0.04em;
+  color: var(--papier-doux); text-align: center; line-height: 1.35;
+}
+.ong button span { display: block; font-size: 17px; margin-bottom: 2px; font-family: var(--titre); }
+.ong button[aria-selected="true"] { color: var(--ambre); }
+.vue { display: none; }
+.vue.on { display: block; }
+
+/* ---------- Tableau de bord ---------- */
+
+.grille { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-bottom: 11px; }
+.carte {
+  background: var(--encre-2); border: 1px solid var(--trait);
+  border-radius: var(--r); padding: 16px;
+}
+.carte .c-t { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ambre); margin-bottom: 7px; }
+.carte .c-g { font-family: var(--titre); font-size: 27px; font-weight: 700; line-height: 1.15; }
+.carte .c-s { font-size: 12.5px; color: var(--papier-doux); margin-top: 5px; }
+
+.jauge { height: 5px; background: var(--encre-3); border-radius: 3px; overflow: hidden; margin-top: 9px; }
+.jauge span { display: block; height: 100%; background: var(--vert); border-radius: 3px; transition: width 0.4s; }
+
+/* ---------- Listes ---------- */
+
+.rang {
+  display: flex; align-items: center; gap: 13px; width: 100%;
+  border-top: 1px solid var(--trait); padding: 14px 0; text-align: left;
+}
+.rang:first-child { border-top: none; }
+.rang-c { flex: 1; min-width: 0; }
+.rang-t { font-size: 15.5px; }
+.rang-d { font-size: 12.5px; color: var(--papier-doux); margin-top: 3px; }
+.rang:disabled { opacity: 0.4; }
+
+.etiq {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 4px 8px; border: 1px solid var(--trait); border-radius: 20px;
+  color: var(--papier-doux); flex: none; white-space: nowrap;
+}
+.etiq.ok { color: var(--vert); border-color: var(--vert); }
+.etiq.cours { color: var(--ambre); border-color: var(--ambre); }
+.etiq.ko { color: var(--corail); border-color: var(--corail); }
+
+/* ---------- Fiche de phrase ---------- */
+
+.fiche { border-top: 1px solid var(--trait); padding: 15px 0; }
+.fiche-lb { font-family: var(--titre); font-size: 21px; font-weight: 700; }
+.fiche-ph { font-size: 12.5px; color: var(--ambre); margin-top: 2px; }
+.fiche-fr { font-size: 14px; color: var(--papier-doux); margin-top: 4px; }
+.fiche-tr { font-size: 12.5px; color: var(--vert); margin-top: 6px; line-height: 1.5; }
+.fiche-out { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+
+.mini {
+  border: 1px solid var(--trait); border-radius: 20px;
+  padding: 7px 13px; font-size: 12px; color: var(--papier-doux);
+  text-decoration: none; display: inline-block;
+}
+.mini:hover { border-color: var(--ambre); color: var(--ambre); }
+.mini.actif { border-color: var(--ambre); color: var(--ambre); }
+
+.rch {
+  width: 100%; background: var(--encre-2); border: 1px solid var(--trait);
+  border-radius: var(--r); color: var(--papier);
+  padding: 13px 15px; font: inherit; margin-bottom: 14px;
+}
+
+/* ---------- Réglages ---------- */
+
+.opt { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--trait); padding: 15px 0; }
+.opt-t { font-size: 15px; }
+.opt-d { font-size: 12.5px; color: var(--papier-doux); margin-top: 3px; line-height: 1.5; }
+.bascule { width: 51px; height: 30px; background: var(--encre-3); border-radius: 15px; position: relative; flex: none; transition: background 0.2s; }
+.bascule::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 12px; background: var(--papier-doux); transition: transform 0.2s, background 0.2s; }
+.bascule[aria-pressed="true"] { background: var(--ambre-doux); }
+.bascule[aria-pressed="true"]::after { transform: translateX(21px); background: var(--ambre); }
+
+.champ { border-top: 1px solid var(--trait); padding: 15px 0; }
+.champ label { display: block; font-size: 15px; margin-bottom: 6px; }
+select, input[type="range"] { width: 100%; }
+select { background: var(--encre-2); border: 1px solid var(--trait); border-radius: 10px; color: var(--papier); padding: 12px; font: inherit; }
+input[type="range"] { accent-color: var(--ambre); height: 34px; }
+
+/* ---------- Diagnostic ---------- */
+
+.diag { border: 1px solid var(--trait); border-radius: var(--r); overflow: hidden; }
+.diag-l { display: flex; gap: 12px; padding: 13px 15px; border-top: 1px solid var(--trait); font-size: 13.5px; align-items: flex-start; }
+.diag-l:first-child { border-top: none; }
+.diag-p { flex: none; width: 22px; font-weight: 700; text-align: center; }
+.diag-l[data-etat="oui"] .diag-p { color: var(--vert); }
+.diag-l[data-etat="non"] .diag-p { color: var(--corail); }
+.diag-l[data-etat="indisponible"] .diag-p { color: var(--papier-doux); }
+.diag-l[data-etat="a_verifier"] .diag-p { color: var(--ambre); }
+.diag-c { flex: 1; min-width: 0; }
+.diag-d { font-size: 12.5px; color: var(--papier-doux); margin-top: 3px; line-height: 1.5; }
+.diag-a { font-size: 12.5px; color: var(--ambre); margin-top: 4px; line-height: 1.5; }
+
+/* ===================================================================
+   SÉANCE
+
+   Un seul élément dominant : la phrase. Tout le reste s'efface.
+   Les commandes sont volontairement immenses : elles doivent être
+   atteignables sans regarder, à l'arrêt comme au feu rouge.
+   =================================================================== */
+
+.seance {
+  position: fixed; inset: 0; z-index: 60;
+  background: radial-gradient(130% 90% at 50% 0%, #16212C 0%, var(--encre) 62%);
+  display: none; flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 14px) 18px calc(env(safe-area-inset-bottom) + 16px);
+}
+.seance.on { display: flex; }
+
+.s-tete { display: flex; justify-content: space-between; align-items: center; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--papier-doux); }
+.s-quitter { padding: 8px 4px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--papier-doux); }
+
+.s-piste { height: 3px; background: var(--encre-3); border-radius: 2px; margin: 13px 0 6px; overflow: hidden; }
+.s-piste span { display: block; height: 100%; background: var(--ambre); width: 0; transition: width 0.5s; }
+.s-piste-l { display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--papier-doux); }
+
+.s-phase { text-align: center; margin-top: 22px; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--papier-doux); min-height: 17px; }
+.s-phase.ok { color: var(--vert); }
+.s-phase.ko { color: var(--corail); }
+.s-phase.att { color: var(--ambre); }
+
+.s-scene { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 8px 0; }
+.s-consigne { font-size: clamp(16px, 4.4vw, 23px); color: var(--papier-doux); line-height: 1.4; max-width: 560px; }
+.s-lb {
+  font-family: var(--titre); font-weight: 700; line-height: 1.06;
+  font-size: clamp(36px, 11.5vw, 76px); word-break: break-word;
+  opacity: 0; transition: opacity 0.22s;
+}
+.s-lb.on { opacity: 1; }
+.s-ph { font-size: clamp(13px, 3.3vw, 17px); color: var(--ambre); letter-spacing: 0.03em; opacity: 0; transition: opacity 0.22s; }
+.s-ph.on { opacity: 1; }
+.s-fr { font-size: clamp(15px, 4.1vw, 23px); color: var(--papier-doux); opacity: 0; transition: opacity 0.22s; }
+.s-fr.on { opacity: 1; }
+
+.s-ecoute { display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--vert); opacity: 0; transition: opacity 0.2s; }
+.s-ecoute.on { opacity: 1; }
+.s-point { width: 10px; height: 10px; border-radius: 50%; background: var(--vert); animation: battement 1.15s infinite; }
+@keyframes battement { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.32; transform: scale(0.72); } }
+
+/* Barre de niveau du micro. Purement informative, jamais un score. */
+.s-niveau { width: 190px; height: 4px; background: var(--encre-3); border-radius: 2px; overflow: hidden; opacity: 0; transition: opacity 0.2s; }
+.s-niveau.on { opacity: 1; }
+.s-niveau i { display: block; height: 100%; width: var(--niveau, 0%); background: var(--vert); transition: width 0.1s linear; }
+
+.s-entendu { font-size: 14px; color: var(--papier); min-height: 20px; opacity: 0; transition: opacity 0.2s; }
+.s-entendu.on { opacity: 1; }
+.s-note { font-size: 12.5px; color: var(--papier-doux); max-width: 480px; line-height: 1.5; }
+
+.s-cmd { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 9px; margin-top: 12px; }
+.s-b {
+  background: var(--encre-2); border: 1px solid var(--trait); border-radius: var(--r);
+  padding: 21px 4px; text-align: center; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+}
+.s-b.principal { background: var(--ambre); color: var(--encre); font-weight: 700; border-color: var(--ambre); }
+
+.s-banniere {
+  background: var(--corail); color: var(--encre); font-size: 12.5px; font-weight: 600;
+  padding: 10px 14px; border-radius: 10px; text-align: center; display: none;
+}
+.s-banniere.on { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

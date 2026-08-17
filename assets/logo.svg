@@ -1,0 +1,50 @@
+<!-- =====================================================================
+     LULU TRAJET · MARQUE
+
+     Lecture du signe :
+       les trois arcs sont le drapeau luxembourgeois, rouge, blanc,
+       bleu ciel, redressés en ondes sonores,
+       la voiture, vue de profil, roule sous les ondes.
+
+     Contraintes retenues :
+       lisible à 48 pixels, donc trois formes seulement,
+       aucun dégradé, aucun détail fin, aucun texte,
+       traits épais, écarts larges, silhouette pleine,
+       fond sombre conservé, cohérent avec l'application.
+     ===================================================================== -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="LULU Trajet">
+  <defs>
+    <clipPath id="tuile"><rect width="512" height="512" rx="114" ry="114"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#tuile)">
+    <rect width="512" height="512" fill="#0A1420"/>
+
+    <!-- Ondes. Couleurs officielles du drapeau luxembourgeois. -->
+    <g fill="none" stroke-linecap="round" stroke-width="30">
+      <path d="M118 214 A 138 138 0 0 1 394 214" stroke="#ED2939"/>
+      <path d="M158 218 A 98 98 0 0 1 354 218"  stroke="#F2F5F7"/>
+      <path d="M198 222 A 58 58 0 0 1 314 222"  stroke="#00A1DE"/>
+    </g>
+
+    <!-- Voiture, silhouette pleine, vue de profil. -->
+    <g fill="#E8B54A">
+      <path d="M104 356
+               c0-13 6-24 18-28
+               l22-8 34-40 c8-9 19-14 31-14
+               h94 c12 0 23 5 31 14 l34 40 22 8
+               c12 4 18 15 18 28
+               v26 c0 9-7 16-16 16 h-16
+               a40 40 0 0 0-80 0 h-80
+               a40 40 0 0 0-80 0 h-16
+               c-9 0-16-7-16-16 z"/>
+      <circle cx="176" cy="398" r="30"/>
+      <circle cx="336" cy="398" r="30"/>
+    </g>
+    <!-- Vitres, en creux sur le fond, pour garder la silhouette nette. -->
+    <path d="M196 316 l24-28 c4-5 10-8 17-8 h38 v36 z
+             M292 280 h38 c7 0 13 3 17 8 l24 28 h-79 z" fill="#0A1420"/>
+    <circle cx="176" cy="398" r="12" fill="#0A1420"/>
+    <circle cx="336" cy="398" r="12" fill="#0A1420"/>
+  </g>
+</svg>

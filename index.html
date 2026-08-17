@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1016">
+<meta name="description" content="Apprendre à parler luxembourgeois pendant les trajets. Écoute, réponds, entends ta voix, recommence.">
+<title>LULU Trajet</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LULU">
+</head>
+<body>
+
+<div class="env">
+
+  <header class="tete">
+    <div>
+      <div class="marque">LULU <em>Trajet</em></div>
+      <div class="devise">Parle luxembourgeois, un trajet à la fois.</div>
+    </div>
+    <div class="compteur" id="compteur"></div>
+  </header>
+
+  <div class="avis grave" id="avisBlocage" hidden></div>
+
+  <!-- ============ ACCUEIL ============ -->
+  <section class="vue on" id="v-accueil">
+
+    <button class="reprendre" id="btnReprendre" hidden>
+      <span>
+        Reprendre
+        <small id="reprendreDetail"></small>
+      </span>
+      <span aria-hidden="true">→</span>
+    </button>
+
+    <div class="choix">
+      <button class="bouton" data-seance="10">
+        <div class="b-t">10 minutes</div>
+        <div class="b-d">Un trajet court</div>
+      </button>
+      <button class="bouton" data-seance="20">
+        <div class="b-t">20 minutes</div>
+        <div class="b-d">La séance de référence</div>
+      </button>
+    </div>
+    <div class="choix">
+      <button class="bouton pleine" data-seance="trajet">
+        <div class="b-t">Mode trajet</div>
+        <div class="b-d">Toute la durée du trajet, sans jamais toucher l'écran.</div>
+      </button>
+    </div>
+
+    <div class="h">Aujourd'hui</div>
+    <div class="grille">
+      <div class="carte"><div class="c-t">À revoir</div><div class="c-g" id="kpiRevoir">0</div><div class="c-s">phrases arrivées à échéance</div></div>
+      <div class="carte"><div class="c-t">Solides</div><div class="c-g" id="kpiSolides">0</div><div class="c-s">tenues dans le temps</div></div>
+    </div>
+
+    <div class="avis" id="avisVoix"></div>
+
+    <div class="h">Ton parcours</div>
+    <div id="listeParcours"></div>
+  </section>
+
+  <!-- ============ PROGRÈS ============ -->
+  <section class="vue" id="v-progres">
+    <div class="h">Ce que tu sais dire</div>
+    <div class="p">Ces chiffres ne comptent pas des leçons terminées. Ils comptent des <b>preuves</b> : une phrase n'avance que si tu l'as réellement produite ou reconnue.</div>
+    <div class="grille">
+      <div class="carte"><div class="c-t">Rencontrées</div><div class="c-g" id="pRencontrees">0</div></div>
+      <div class="carte"><div class="c-t">Comprises</div><div class="c-g" id="pComprises">0</div></div>
+    </div>
+    <div class="grille">
+      <div class="carte"><div class="c-t">Retrouvées</div><div class="c-g" id="pRappelees">0</div></div>
+      <div class="carte"><div class="c-t">Produites sans aide</div><div class="c-g" id="pProduites">0</div></div>
+    </div>
+    <div class="carte">
+      <div class="c-t">Solides après plusieurs jours</div>
+      <div class="c-g" id="pSolides">0</div>
+      <div class="c-s" id="pSolidesDetail"></div>
+      <div class="jauge"><span id="pJauge"></span></div>
+    </div>
+
+    <div class="h">Prononciation</div>
+    <div class="avis" id="avisPrononciation"></div>
+
+    <div class="h">Ce qui te résiste</div>
+    <div id="listeDifficultes"></div>
+
+    <div class="h">Sauvegarde</div>
+    <div class="p">La progression vit sur cet appareil. Les enregistrements de ta voix ne sont jamais exportés.</div>
+    <div class="choix">
+      <button class="bouton" id="btnExport"><div class="b-t">Exporter</div><div class="b-d">Un fichier à conserver</div></button>
+      <button class="bouton" id="btnImport"><div class="b-t">Importer</div><div class="b-d">Restaurer une sauvegarde</div></button>
+    </div>
+    <input type="file" id="fichierImport" accept="application/json" hidden>
+  </section>
+
+  <!-- ============ CONTENU ET VÉRIFICATION ============ -->
+  <section class="vue" id="v-contenu">
+    <div class="avis" id="avisContenu"></div>
+    <input class="rch" id="recherche" type="search" placeholder="Chercher en luxembourgeois ou en français" aria-label="Chercher une phrase">
+    <div class="fiche-out" id="filtres">
+      <button class="mini actif" data-filtre="tout">Tout</button>
+      <button class="mini" data-filtre="unverified">À vérifier</button>
+      <button class="mini" data-filtre="reviewing">En cours</button>
+      <button class="mini" data-filtre="verified">Vérifiées</button>
+      <button class="mini" data-filtre="derive">Dérivées</button>
+    </div>
+    <div id="listePhrases"></div>
+  </section>
+
+  <!-- ============ VOIX ============ -->
+  <section class="vue" id="v-voix">
+    <div class="h">Diagnostic</div>
+    <div class="p">À faire une fois, <b>à l'arrêt</b>. Chaque ligne dit oui ou non, et pourquoi.</div>
+    <button class="bouton pleine" id="btnDiag" style="margin-bottom:14px"><div class="b-t">Lancer le diagnostic</div><div class="b-d">Environ trente secondes. Parle quand on te le demande.</div></button>
+    <div class="diag" id="resultatDiag"><div class="diag-l"><div class="diag-p">·</div><div class="diag-c">Test non lancé.</div></div></div>
+
+    <div class="h">Ma voix</div>
+    <div class="avis" id="avisMaVoix"></div>
+    <div class="opt">
+      <div>
+        <div class="opt-t">Réécouter ma tentative</div>
+        <div class="opt-d">Après chaque réponse : le retour, ta voix, puis le modèle. Fonctionne sans réseau.</div>
+      </div>
+      <button class="bascule" id="bEcho" aria-pressed="true" aria-label="Réécouter ma tentative"></button>
+    </div>
+    <div class="opt">
+      <div>
+        <div class="opt-t">Conserver mes enregistrements</div>
+        <div class="opt-d">Désactivé par défaut. Activé, tu pourras épingler certaines tentatives pour comparer ta progression. Rien ne part sur Internet sans reconnaissance vocale active.</div>
+      </div>
+      <button class="bascule" id="bConserver" aria-pressed="false" aria-label="Conserver mes enregistrements"></button>
+    </div>
+    <div id="listeEnregistrements"></div>
+    <button class="bouton pleine" id="btnEffacerVoix" style="margin-top:10px"><div class="b-t">Effacer tous mes enregistrements</div><div class="b-d">Immédiat et définitif</div></button>
+
+    <div class="h">Reconnaissance</div>
+    <div id="listeProviders"></div>
+
+    <div class="h">Réglages</div>
+    <div class="champ">
+      <label for="selVoixLb">Voix du modèle</label>
+      <div class="opt-d" id="noteVoixLb"></div>
+      <select id="selVoixLb"></select>
+    </div>
+    <div class="champ">
+      <label for="selVoixFr">Voix du professeur, en français</label>
+      <select id="selVoixFr"></select>
+    </div>
+    <div class="champ">
+      <label for="rgVitesse">Vitesse · <span id="valVitesse"></span></label>
+      <input type="range" id="rgVitesse" min="0.5" max="1.15" step="0.05">
+    </div>
+    <div class="champ">
+      <label for="rgAttente">Temps pour répondre · <span id="valAttente"></span></label>
+      <input type="range" id="rgAttente" min="2500" max="9000" step="500">
+    </div>
+    <div class="champ">
+      <label for="selProfil">Environnement sonore</label>
+      <select id="selProfil">
+        <option value="voiture">Voiture</option>
+        <option value="calme">Endroit calme</option>
+      </select>
+    </div>
+
+    <div class="h">Remise à zéro</div>
+    <button class="bouton pleine" id="btnRaz"><div class="b-t">Effacer toute la progression</div><div class="b-d">Les enregistrements sont effacés aussi</div></button>
+  </section>
+
+  <!-- ============ MÉTHODE ============ -->
+  <section class="vue" id="v-methode">
+    <div class="h">Ce que fait cette application</div>
+    <div class="p">Tu entends une phrase. Tu réponds à voix haute. Elle écoute, elle analyse ce qu'elle peut réellement analyser, elle te le dit, tu entends ta voix, puis le modèle. La séance continue seule.</div>
+
+    <div class="h2">Six dimensions, jamais mélangées</div>
+    <div class="p">
+      <b>Exposition</b> · tu l'as entendue.<br>
+      <b>Compréhension</b> · tu sais ce que ça veut dire.<br>
+      <b>Rappel</b> · tu retrouves la forme.<br>
+      <b>Production</b> · tu la dis.<br>
+      <b>Fluidité</b> · tu la dis vite.<br>
+      <b>Prononciation</b> · non mesurée, faute d'instrument.
+    </div>
+    <div class="p">Écouter une phrase ne la fait monter d'aucune de ces dimensions. C'est la règle qui empêche l'illusion de progresser.</div>
+
+    <div class="h2">Trois natures d'échec</div>
+    <div class="p">
+      <b>Erreur</b> · un moteur qui connaît le luxembourgeois a entendu autre chose. C'est le seul cas où ta progression peut baisser.<br>
+      <b>Incertitude</b> · le moteur n'a pas su. Ta progression ne bouge pas.<br>
+      <b>Panne</b> · micro, réseau ou service. Ta progression ne bouge pas, et ce n'est pas ta faute.
+    </div>
+
+    <div class="h2">Quand une phrase revient</div>
+    <div class="p">Dix minutes, un jour, trois jours, sept, quatorze, trente, soixante. Le premier palier est court exprès : c'est la reprise dans la même séance qui fait tenir une phrase.</div>
+
+    <div class="h2">Ce que cette version ne sait pas faire</div>
+    <div class="p" id="limitesHonnetes"></div>
+  </section>
+</div>
+
+<!-- ============ NAVIGATION ============ -->
+<nav class="ong" role="tablist">
+  <button role="tab" aria-selected="true" data-vue="accueil"><span>◈</span>Séance</button>
+  <button role="tab" aria-selected="false" data-vue="progres"><span>◑</span>Progrès</button>
+  <button role="tab" aria-selected="false" data-vue="contenu"><span>≡</span>Phrases</button>
+  <button role="tab" aria-selected="false" data-vue="voix"><span>◉</span>Voix</button>
+  <button role="tab" aria-selected="false" data-vue="methode"><span>?</span>Méthode</button>
+</nav>
+
+<!-- ============ SÉANCE ============ -->
+<div class="seance" id="seance" aria-live="polite">
+  <div class="s-banniere" id="sBanniere"></div>
+  <div class="s-tete">
+    <span id="sMode">Séance</span>
+    <button class="s-quitter" id="sQuitter">Terminer</button>
+  </div>
+  <div class="s-piste"><span id="sPiste"></span></div>
+  <div class="s-piste-l"><span id="sPosition"></span><span id="sTemps"></span></div>
+
+  <div class="s-phase" id="sPhase">Prêt</div>
+
+  <div class="s-scene">
+    <div class="s-consigne" id="sConsigne"></div>
+    <div class="s-lb" id="sLb"></div>
+    <div class="s-ph" id="sPh"></div>
+    <div class="s-fr" id="sFr"></div>
+    <div class="s-ecoute" id="sEcoute"><span class="s-point"></span><span>Je t'écoute</span></div>
+    <div class="s-niveau" id="sNiveau"><i></i></div>
+    <div class="s-entendu" id="sEntendu"></div>
+    <div class="s-note" id="sNote"></div>
+  </div>
+
+  <div class="s-cmd">
+    <button class="s-b" id="sRepeter">Répète</button>
+    <button class="s-b principal" id="sPause">Pause</button>
+    <button class="s-b" id="sSuivant">Suivant</button>
+  </div>
+</div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
