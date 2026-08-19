@@ -9,7 +9,7 @@
    Le numéro de version doit changer à chaque livraison, sinon les
    téléphones gardent l'ancienne.
    =================================================================== */
-const VERSION = "lulu-v6-0-2-audiosession";
+const VERSION = "lulu-v6-0-3-reactivation";
 
 const FICHIERS = [
   "./", "./index.html", "./styles.css", "./manifest.webmanifest",

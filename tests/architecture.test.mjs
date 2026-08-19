@@ -352,3 +352,21 @@ test("changer d'onglet pendant une séance la met en pause", () => {
   assert.match(nav, /audio\?\.pause\(\)/,
     "la séance peut continuer derrière un autre onglet");
 });
+
+test("la promesse de réactivation ne s'auto-référence jamais pendant sa construction", () => {
+  const app = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  assert.doesNotMatch(app, /reprisePromise\.resoudre\s*=/,
+    "Le callback du constructeur Promise s'exécute avant l'affectation de reprisePromise : s'auto-référencer ici tue la boucle.");
+  assert.match(app, /let\s+resoudreReprise\s*=\s*null/);
+  assert.match(app, /new Promise\(\(resolve\)\s*=>\s*\{\s*resoudreReprise\s*=\s*resolve;?\s*\}\)/s);
+});
+
+test("un blocage du premier son attend une réactivation au lieu d'abandonner la séance", () => {
+  const app = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  const debut = app.indexOf("const textePremier");
+  const fin = app.indexOf("await boucle(jetonSeance)", debut);
+  assert.ok(debut >= 0 && fin > debut, "bloc premier son introuvable");
+  const bloc = app.slice(debut, fin);
+  assert.match(bloc, /while\s*\(seance\s*&&\s*!premier\?\.demarree\)/);
+  assert.match(bloc, /await\s+attendreReactivation\(\)/);
+});

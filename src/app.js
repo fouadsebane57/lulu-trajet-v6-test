@@ -58,6 +58,7 @@ let filtreContenu = "tout";
    réactivé. L'exercice courant n'est PAS consommé. */
 let blocageAudio = null;
 let reprisePromise = null;
+let resoudreReprise = null;
 
 export const ISSUE = {
   TERMINE: "termine",
@@ -185,14 +186,23 @@ export async function demarrerSeance(duree, deverrouillage = null) {
   // Premier son de la séance. S'il ne démarre pas réellement, la
   // séance ne commence pas : elle affiche un blocage explicite au lieu
   // de défiler en silence.
-  const premier = await audio.direConsigne(mode === Sess.MODES.TRAJET
+  const textePremier = mode === Sess.MODES.TRAJET
     ? "Mode trajet. Pose le téléphone. Réponds toujours à voix haute."
-    : "On commence. Réponds à voix haute.");
+    : "On commence. Réponds à voix haute.";
 
-  if (!premier?.demarree) {
+  let premier = await audio.direConsigne(textePremier);
+
+  // Le premier son peut lui aussi être bloqué sur iOS. Dans ce cas,
+  // on utilise exactement le même mécanisme de réactivation que pour
+  // les exercices, au lieu de quitter demarrerSeance() et de laisser
+  // un bouton sans boucle à réveiller.
+  while (seance && !premier?.demarree) {
     poserBlocage("premier_son", premier?.cause || "pas_de_demarrage");
-    return;
+    const reprise = await attendreReactivation();
+    if (!reprise || !seance) return;
+    premier = await audio.direConsigne(textePremier);
   }
+  leverBlocage();
 
   await boucle(jetonSeance);
 }
@@ -567,7 +577,12 @@ export async function terminerSeance(raison = "sortie") {
   jetonSeance += 1;
   // Une boucle en attente de réactivation doit être relâchée, sinon
   // elle reste suspendue pour toujours.
-  if (reprisePromise) { const p = reprisePromise; reprisePromise = null; p.resoudre?.(false); }
+  if (reprisePromise) {
+    const resoudre = resoudreReprise;
+    reprisePromise = null;
+    resoudreReprise = null;
+    resoudre?.(false);
+  }
   leverBlocage();
   Coord.arreter();
   Coord.rendre(Coord.PROPRIETAIRE.SEANCE);
@@ -632,7 +647,14 @@ function leverBlocage() {
  */
 function attendreReactivation() {
   if (reprisePromise) return reprisePromise;
-  reprisePromise = new Promise((resolve) => { reprisePromise.resoudre = resolve; });
+  // IMPORTANT : le constructeur de Promise exécute son callback
+  // immédiatement, AVANT que l'affectation à `reprisePromise` soit
+  // terminée. L'ancienne version faisait
+  // une propriété sur `reprisePromise` dans ce callback alors que
+  // `reprisePromise` valait encore null. Sur iPhone, le premier blocage
+  // audio faisait donc tomber la boucle de séance, puis le bouton
+  // « Réactiver le son » n'avait plus rien à réveiller.
+  reprisePromise = new Promise((resolve) => { resoudreReprise = resolve; });
   return reprisePromise;
 }
 
@@ -644,16 +666,26 @@ function attendreReactivation() {
 function reactiverSon() {
   const rapport = Coord.deverrouiller();          // synchrone, dans le geste
   (async () => {
-    const dev = await Coord.confirmerDeverrouillage(rapport);
-    audio?.tracer?.("reactivation", dev);
-    if (dev.etat === Coord.DEVERROUILLAGE.ECHOUE) {
-      afficherNote("Le son reste bloqué. Vérifie le bouton silencieux et le volume, puis réessaie.");
-      return;
+    try {
+      const dev = await Coord.confirmerDeverrouillage(rapport);
+      audio?.tracer?.("reactivation", dev);
+      // PARTIEL n'est pas suffisant : si play() a été refusé, reprendre
+      // la boucle ne ferait que retomber immédiatement dans le silence.
+      if (dev.etat !== Coord.DEVERROUILLAGE.REUSSI) {
+        afficherNote("Le son reste bloqué. Vérifie le bouton silencieux et le volume, puis réessaie.");
+        return;
+      }
+      leverBlocage();
+      const resoudre = resoudreReprise;
+      reprisePromise = null;
+      resoudreReprise = null;
+      resoudre?.(true);
+    } catch (err) {
+      // Ne jamais cacher le bouton ni laisser la séance dans un état
+      // mort si la réactivation elle-même échoue.
+      audio?.tracer?.("reactivation_erreur", { cause: err?.message || String(err) });
+      afficherNote("La réactivation n'a pas abouti. Touche à nouveau « Réactiver le son ». ");
     }
-    leverBlocage();
-    const p = reprisePromise;
-    reprisePromise = null;
-    p?.resoudre?.(true);
   })();
 }
 
