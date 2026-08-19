@@ -57,6 +57,7 @@
    =================================================================== */
 
 import { LECTURE, MESSAGE } from "./lecture.js";
+import * as SessionIOS from "./session-ios.js";
 
 /** Qui détient le son. Un seul à la fois. */
 export const PROPRIETAIRE = {
@@ -145,11 +146,17 @@ const SILENCE_WAV =
  * @returns {object} rapport synchrone, complété par `attendre()`
  */
 export function deverrouiller() {
+  // Important sur iOS : la catégorie "playback" remet la sortie sur le
+  // chemin de lecture après un éventuel passage antérieur par le micro.
+  // Appel synchrone pour rester dans le geste utilisateur.
+  const sessionAudio = SessionIOS.preparerLecture();
+
   const rapport = {
     elementCree: false,
     playAppele: false,
     playPromesse: null,
     ttsAppele: false,
+    sessionAudio,
     erreurs: []
   };
 
@@ -207,11 +214,25 @@ export async function confirmerDeverrouillage(rapport) {
     playAutorise: play.ok,
     playErreur: play.nom || "",
     tts: !!rapport?.ttsAppele,
+    audioSession: rapport?.sessionAudio || SessionIOS.etat(),
     erreurs: rapport?.erreurs || []
   };
   noter("deverrouillage_resultat", detailDeverrouillage);
   try { element?.pause?.(); } catch (_) {}
   return etatDeverrouillage();
+}
+
+/**
+ * Prépare une lecture déclenchée DIRECTEMENT par un clic sans lancer
+ * le WAV silencieux. Le play() du contenu réel doit être le premier
+ * play() utile du geste ; cela évite une course silence -> Blob.
+ */
+export function preparerLectureDirecte() {
+  const sessionAudio = SessionIOS.preparerLecture();
+  let elementCree = false;
+  try { creerElement(); elementCree = true; } catch (_) {}
+  noter("lecture_directe_preparee", { elementCree, audioSession: sessionAudio.type || "" });
+  return { elementCree, sessionAudio };
 }
 
 /* ===================================================================
@@ -260,6 +281,9 @@ export function forcerLiberation() {
  * signifie seulement que la lecture a été autorisée à commencer.
  */
 export function jouerBlob(blob, opt = {}) {
+  // Chaque lecture réaffirme la catégorie playback. C'est volontaire :
+  // sur Safari iOS, getUserMedia peut la remettre en play-and-record.
+  const sessionAudio = SessionIOS.preparerLecture();
   const plafondMs = opt.plafondMs ?? 15000;
   const trace = [];
   const marque = (nom, extra = {}) => trace.push({ nom, ms: Date.now(), ...extra });

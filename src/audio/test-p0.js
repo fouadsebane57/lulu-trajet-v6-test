@@ -106,18 +106,23 @@ export function lireEnregistrement(attemptId) {
     });
   }
 
-  // Déverrouillage puis lecture, tous deux dans le geste.
-  const dev = Coord.deverrouiller();
+  // Lecture DIRECTE dans le geste. On ne joue pas d'abord un silence :
+  // ce silence pouvait entrer en course avec le Blob réel sur Safari.
+  const prep = Coord.preparerLectureDirecte();
 
   return Coord.jouerBlob(blob).then(async (r) => {
-    const deverrouillage = await Coord.confirmerDeverrouillage(dev);
+    const session = prep.sessionAudio || {};
     return {
       ok: r.demarree && r.terminee,
       blobPresent: true,
       attemptId,
       mime: blob.type || "",
       octets: blob.size,
-      deverrouillage: deverrouillage.etat,
+      deverrouillage: prep.elementCree ? "lecture_directe" : "echoue",
+      audioSessionSupportee: !!session.supporte,
+      audioSessionType: session.type || "indisponible",
+      audioSessionEtat: session.etat || "",
+      audioSessionErreur: session.erreur || "",
       objectUrl: "créée",
       playAppele: true,
       // Une promesse de play() tenue signifie AUTORISÉE, pas ENTENDUE.
@@ -150,7 +155,8 @@ export function lireEnregistrement(attemptId) {
  * Sans `onstart`, le résultat est un échec, jamais une réussite.
  */
 export function testerVoixModele(texte = "Moien") {
-  Coord.deverrouiller();
+  // Tts.dire() prépare lui-même la catégorie playback et appelle
+  // speechSynthesis.speak() immédiatement dans ce geste.
   const voix = Tts.voixActuelles();
 
   return Tts.dire(texte, "lb", 1).then((r) => ({

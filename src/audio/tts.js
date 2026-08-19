@@ -20,6 +20,8 @@
    synthèse sans qu'aucun autre module ne change.
    =================================================================== */
 
+import * as SessionIOS from "./session-ios.js";
+
 let voix = [];
 let voixLb = null;
 let voixFr = null;
@@ -156,6 +158,10 @@ export const DELAI_DEMARRAGE_MS = 1600;
  * aucune estimation de durée ne peut le mettre à vrai.
  */
 export function dire(texte, langue = "lb", facteur = 1) {
+  // Après une capture micro, Safari iOS peut rester dans une catégorie
+  // de session orientée enregistrement. Réaffirmer "playback" juste
+  // avant speak() remet la sortie sur le chemin de lecture.
+  SessionIOS.preparerLecture();
   dernier = { texte, langue, facteur };
 
   return new Promise((resolve) => {

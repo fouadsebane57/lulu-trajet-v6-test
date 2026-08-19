@@ -1088,8 +1088,9 @@ function ecouterTentative(attemptId) {
   const pris = Coord.prendre(Coord.PROPRIETAIRE.MANUEL);
   if (!pris.ok) { alerte("Un autre son est en cours."); return; }
 
-  // Déverrouillage puis lecture, tous deux amorcés dans le geste.
-  Coord.deverrouiller();
+  // Lecture directe : ne pas lancer un WAV silencieux juste avant le
+  // Blob réel, ce qui provoquait une course sur Safari iOS.
+  Coord.preparerLectureDirecte();
   Coord.jouerBlob(blob).then((r) => {
     Coord.rendre(Coord.PROPRIETAIRE.MANUEL);
     if (!r.demarree) {
@@ -1106,7 +1107,7 @@ function direPhraseManuelle(idPhrase) {
   if (seance && !enPause) { alerte("Mets la séance en pause avant d'écouter une phrase."); return; }
   const pris = Coord.prendre(Coord.PROPRIETAIRE.MANUEL);
   if (!pris.ok) { alerte("Un autre son est en cours."); return; }
-  Coord.deverrouiller();
+  Coord.preparerLectureDirecte();
   VoixModele.dire(p, { vitesse: "normal" }).then((r) => {
     Coord.rendre(Coord.PROPRIETAIRE.MANUEL);
     if (!r.joue) alerte(`La voix n'a pas démarré. Cause : ${r.cause || "inconnue"}.`);
@@ -1163,7 +1164,8 @@ function brancherTestsP0() {
     TestP0.lireEnregistrement(dernierAttemptP0).then((r) => {
       el.innerHTML = [
         ligne(r.blobPresent ? "oui" : "non", "Enregistrement présent", r.blobPresent ? `${r.octets} octets, ${r.mime}` : r.message),
-        ligne(r.deverrouillage === "reussi" ? "oui" : "non", "Son déverrouillé", r.deverrouillage || ""),
+        ligne(r.deverrouillage === "lecture_directe" ? "oui" : "non", "Lecture directe préparée", r.deverrouillage || ""),
+        ligne(r.audioSessionSupportee ? "oui" : "indisponible", "AudioSession iOS", r.audioSessionSupportee ? `${r.audioSessionType}${r.audioSessionEtat ? " · " + r.audioSessionEtat : ""}` : "API non disponible"),
         ligne("oui", "play() appelée", ""),
         ligne(r.playAutorisee ? "oui" : "non", "Lecture autorisée", r.playAutorisee ? "La promesse de play() a été tenue." : "Refusée par le navigateur."),
         ligne(r.demarree ? "oui" : "non", "Lecture démarrée", r.demarree ? "Événement playing reçu." : "Aucun événement playing. Rien n'a été joué."),

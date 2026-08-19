@@ -16,6 +16,8 @@
      une mesure jugée impossible est signalée, jamais utilisée.
    =================================================================== */
 
+import * as SessionIOS from "./session-ios.js";
+
 export const DB_MIN = -100;            // plancher numérique, jamais dépassé
 export const DB_PAROLE_MINIMALE = -55; // sous ce pic, il n'y a pas de voix
 
@@ -44,10 +46,19 @@ export async function ouvrir(prefereId = deviceId) {
   if (!supporte()) throw typer("Ce navigateur ne donne pas accès au micro.", "mic");
   if (stream && stream.active && (!prefereId || prefereId === deviceId)) return stream;
   fermer();
+
+  // iOS : getUserMedia bascule la session système en capture. On
+  // annonce explicitement le mode play-and-record avant ET après
+  // l'ouverture afin de stabiliser la route pendant l'enregistrement.
+  SessionIOS.preparerCapture();
+
   const audio = { ...CONTRAINTES };
   if (prefereId) audio.deviceId = { ideal: prefereId };
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio });
+    // WebKit peut réécrire sa catégorie pendant la résolution de
+    // getUserMedia. On la réaffirme une fois la capture réellement active.
+    SessionIOS.preparerCapture();
   } catch (err) {
     dernierEchec = messageErreurMicro(err);
     throw typer(dernierEchec, "mic", err);
@@ -180,9 +191,26 @@ export async function fermerContexte() {
 export async function rendreAudioAuSysteme() {
   fermer();
   const avant = await fermerContexte();
-  // Court répit : iOS ne bascule pas la route de sortie instantanément.
-  await new Promise((r) => setTimeout(r, 180));
-  return { contexteAvant: avant, fluxOuvert: fluxOuvert() };
+
+  // Correctif iPhone réel, deuxième niveau : arrêter les pistes et
+  // fermer l'AudioContext ne suffit pas toujours à faire revenir la
+  // sortie vers le haut-parleur. WebKit expose navigator.audioSession
+  // sur les iPhone récents : on force la catégorie de LECTURE après
+  // chaque capture. Cela corrige également le cas où l'interrupteur
+  // silencieux coupe la sortie WebAudio.
+  const session1 = SessionIOS.preparerLecture();
+  await new Promise((r) => setTimeout(r, 220));
+  // Réaffirmer après le délai car WebKit peut modifier la catégorie
+  // pendant la destruction effective du périphérique de capture.
+  const session2 = SessionIOS.preparerLecture();
+  return {
+    contexteAvant: avant,
+    fluxOuvert: fluxOuvert(),
+    audioSessionSupportee: session2.supporte,
+    audioSessionType: session2.type,
+    audioSessionEtat: session2.etat,
+    audioSessionErreur: session2.erreur || session1.erreur || ""
+  };
 }
 
 /**

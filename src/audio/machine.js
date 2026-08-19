@@ -38,6 +38,7 @@
    =================================================================== */
 
 import * as Micro from "./mic.js";
+import * as SessionIOS from "./session-ios.js";
 import * as Voix from "./tts.js";
 import { capturer } from "./recorder.js";
 import { LECTURE } from "./lecture.js";
@@ -287,6 +288,7 @@ export function creer({ onEtat, onJournal, lecteur = null } = {}) {
       annulation = true;
       motif = MOTIF.SORTIE;
       await silence(raison);
+      SessionIOS.reinitialiser();
       if (etat !== ETAT.TERMINE) { etat = ETAT.TERMINE; noter("termine", { raison }); onEtat?.(etat); }
       occupe = false;
       jeton += 1;               // invalide toute boucle encore en vol

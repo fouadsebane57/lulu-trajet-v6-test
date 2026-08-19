@@ -46,7 +46,7 @@ const OBLIGATOIRES = [
   // vingt et un tests ne se lançaient plus dans l'archive extraite.
   "src/core/config.js", "src/core/restitution.js",
   "src/audio/tentative.js", "src/audio/voix-modele.js", "src/audio/machine.js",
-  "src/audio/coordinateur.js", "src/audio/test-p0.js", "src/audio/lecture.js",
+  "src/audio/coordinateur.js", "src/audio/session-ios.js", "src/audio/test-p0.js", "src/audio/lecture.js",
   "src/speech/engine.js", "src/speech/provider.js", "src/speech/prononciation.js",
   "src/speech/providers/luxasr.js", "src/speech/providers/repli.js",
   "src/platform/index.js", "src/ui/diagnostic.js",
@@ -155,7 +155,7 @@ try {
 
 let resumeTests = "";
 try {
-  const sortie = execFileSync("node", ["--test", "tests/*.test.mjs"], {
+  const sortie = execFileSync("node", ["--test", "--test-concurrency=1", "tests/*.test.mjs"], {
     cwd: RACINE, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]
   });
   const total = sortie.match(/^# tests (\d+)$/m)?.[1];
