@@ -25,6 +25,7 @@ import * as Micro from "./audio/mic.js";
 import * as VoixModele from "./audio/voix-modele.js";
 import * as Tentatives from "./audio/tentative.js";
 import { jouer, reussie as lectureReussie } from "./audio/lecture.js";
+import * as Coord from "./audio/coordinateur.js";
 import * as Moteur from "./speech/engine.js";
 import { NATURE } from "./speech/engine.js";
 import * as Providers from "./speech/provider.js";
@@ -33,6 +34,7 @@ import { creerLuxasr } from "./speech/providers/index.js";
 import { creerNavigateur, creerAucun } from "./speech/providers/repli.js";
 import * as Plateforme from "./platform/index.js";
 import * as Diagnostic from "./ui/diagnostic.js";
+import * as TestP0 from "./audio/test-p0.js";
 import { TYPES } from "./content/exercices.js";
 
 export const VERSION = "6.0.0";
@@ -52,8 +54,20 @@ let enPause = false;
 let exerciceCourant = null;
 let sautEnAttente = false;
 let filtreContenu = "tout";
+/* Blocage audio : la séance est suspendue tant que le son n'a pas été
+   réactivé. L'exercice courant n'est PAS consommé. */
+let blocageAudio = null;
+let reprisePromise = null;
 
-export const ISSUE = { TERMINE: "termine", PAUSE: "pause", SAUTE: "saute", ABANDONNE: "abandonne" };
+export const ISSUE = {
+  TERMINE: "termine",
+  PAUSE: "pause",
+  SAUTE: "saute",
+  ABANDONNE: "abandonne",
+  /* Un segment audio obligatoire n'a pas produit de son. L'exercice
+     reste courant, la séance attend une réactivation. */
+  AUDIO_BLOQUE: "audio_bloque"
+};
 
 /* ===================================================================
    DÉMARRAGE
@@ -105,18 +119,28 @@ export async function initialiser() {
    SÉANCE
    =================================================================== */
 
-export async function demarrerSeance(duree) {
+/**
+ * Démarre une séance.
+ *
+ * @param {object} deverrouillage  rapport produit SYNCHRONEMENT dans le
+ *   gestionnaire de clic. Sur iOS, l'autorisation de jouer du son
+ *   n'existe que dans la pile d'appels issue du toucher. Tout ce qui
+ *   arrive après un `await` est trop tard.
+ */
+export async function demarrerSeance(duree, deverrouillage = null) {
   if (audio?.occupe()) { alerte("Une séance est déjà en cours."); return; }
 
   const minutes = duree === "trajet" ? Number(S.state().reglages.duree || 20) : Number(duree) || 10;
   const mode = duree === "trajet" ? Sess.MODES.TRAJET : Sess.MODES.APPRENTISSAGE;
 
+  Coord.prendre(Coord.PROPRIETAIRE.SEANCE);
   audio = Machine.creer({ onEtat: () => {} });
-  const dep = await audio.demarrer();
+  const dep = await audio.demarrer({ deverrouillage });
   if (!dep.ok) {
     audio = null;
-    alerte(dep.cause === "contexte_audio_endormi"
-      ? "Le moteur audio n'a pas démarré. Touche l'écran, puis réessaie."
+    Coord.rendre(Coord.PROPRIETAIRE.SEANCE);
+    alerte(dep.cause === "audio_verrouille"
+      ? "Le son n'a pas pu être activé. Touche « Démarrer » à nouveau, sans passer par un autre bouton."
       : "Une séance est déjà en cours.");
     return;
   }
@@ -156,10 +180,19 @@ export async function demarrerSeance(duree) {
 
   Sess.demarrer(seance);
   activerCommandesSysteme();
+  blocageAudio = null;
 
-  await audio.direConsigne(mode === Sess.MODES.TRAJET
+  // Premier son de la séance. S'il ne démarre pas réellement, la
+  // séance ne commence pas : elle affiche un blocage explicite au lieu
+  // de défiler en silence.
+  const premier = await audio.direConsigne(mode === Sess.MODES.TRAJET
     ? "Mode trajet. Pose le téléphone. Réponds toujours à voix haute."
     : "On commence. Réponds à voix haute.");
+
+  if (!premier?.demarree) {
+    poserBlocage("premier_son", premier?.cause || "pas_de_demarrage");
+    return;
+  }
 
   await boucle(jetonSeance);
 }
@@ -186,6 +219,12 @@ async function boucle(jeton) {
 
     if (!seance || jeton !== jetonSeance) return;
     if (issue === ISSUE.ABANDONNE) return;
+    if (issue === ISSUE.AUDIO_BLOQUE) {
+      // L'exercice N'EST PAS consommé. On attend une réactivation.
+      const reprise = await attendreReactivation();
+      if (!reprise) return;
+      continue;
+    }
     if (issue === ISSUE.PAUSE) continue;          // rien n'est consommé
     if (issue === ISSUE.SAUTE) {
       Sess.sauterExercice(seance, ex);
@@ -224,8 +263,10 @@ async function jouerExercice(ex, jeton) {
   if (ex.type === TYPES.ECOUTE.id || ex.type === TYPES.ECOUTE_LENTE.id) {
     const lent = ex.type === TYPES.ECOUTE_LENTE.id;
     scene({ phase: lent ? "Écoute, lentement" : "Écoute", lb: p.lb, ph: p.ph });
-    await direModele(p, lent ? "lent" : "normal");
+    const m = await direModele(p, lent ? "lent" : "normal");
     if (!vivant()) return issueCourante();
+    // Un exercice d'écoute sans son n'enseigne rien. On ne le consomme pas.
+    if (!m.joue) { poserBlocage("modele", m.cause); return ISSUE.AUDIO_BLOQUE; }
     scene({ phase: "Ce que ça veut dire", lb: p.lb, ph: p.ph, fr: p.fr });
     await audio.direConsigne(p.fr);
     if (!vivant()) return issueCourante();
@@ -238,16 +279,19 @@ async function jouerExercice(ex, jeton) {
   /* --- Répétition : le modèle d'abord, puis la voix de l'apprenant --- */
   if (ex.type === TYPES.REPETITION.id) {
     scene({ phase: "Répète après moi", lb: p.lb, ph: p.ph });
-    await direModele(p, "normal");
+    const m = await direModele(p, "normal");
     if (!vivant()) return issueCourante();
+    // Répéter sans avoir entendu le modèle n'a aucun sens.
+    if (!m.joue) { poserBlocage("modele", m.cause); return ISSUE.AUDIO_BLOQUE; }
     return await tourDeParole(ex, p, { consigne: "", montrerReponse: true, jeton });
   }
 
   /* --- Compréhension : on entend, on doit dire le sens --- */
   if (ex.type === TYPES.COMPREHENSION.id) {
     scene({ phase: "Qu'est-ce que ça veut dire ?", lb: p.lb });
-    await direModele(p, "normal");
+    const m = await direModele(p, "normal");
     if (!vivant()) return issueCourante();
+    if (!m.joue) { poserBlocage("modele", m.cause); return ISSUE.AUDIO_BLOQUE; }
     await audio.attendreUtilisateur(2600);
     if (!vivant()) return issueCourante();
     scene({ phase: "Le sens", lb: p.lb, ph: p.ph, fr: p.fr });
@@ -260,8 +304,9 @@ async function jouerExercice(ex, jeton) {
   /* --- Nombre --- */
   if (ex.type === TYPES.NOMBRE.id) {
     scene({ phase: "Quel nombre ?", lb: p.lb });
-    await direModele(p, "normal");
+    const m = await direModele(p, "normal");
     if (!vivant()) return issueCourante();
+    if (!m.joue) { poserBlocage("modele", m.cause); return ISSUE.AUDIO_BLOQUE; }
     await audio.attendreUtilisateur(2400);
     if (!vivant()) return issueCourante();
     scene({ phase: "Réponse", lb: p.lb, fr: p.fr });
@@ -368,7 +413,7 @@ async function tourDeParole(ex, p, { montrerReponse, rapide, jeton }) {
 
   // Retour, ta voix, puis le modèle. Le dernier son entendu est
   // toujours la forme cible, jamais l'erreur de l'apprenant.
-  await restituer({
+  const rapport = await restituer({
     audio,
     item: p,
     vivant,
@@ -383,6 +428,15 @@ async function tourDeParole(ex, p, { montrerReponse, rapide, jeton }) {
     // L'écho reçoit le Blob de CETTE tentative, par son identifiant.
     rejouer: () => rejouerMaVoix(r.attemptId)
   });
+
+  if (!vivant()) return issueCourante();
+
+  // Un segment audio obligatoire n'a pas produit de son : l'exercice
+  // n'est pas consommé, la séance affiche un blocage explicite.
+  if (rapport?.blocageAudio) {
+    poserBlocage(rapport.segmentBloque, rapport.causeBlocage);
+    return ISSUE.AUDIO_BLOQUE;
+  }
 
   return issueCourante();
 }
@@ -462,9 +516,16 @@ async function jouerTourDeDialogue(ex, jeton) {
 
 /* ---------- Voix du modèle ---------- */
 
+/**
+ * Fait entendre le modèle.
+ * Renvoie ce qui s'est réellement passé. Un modèle qui n'a pas démarré
+ * n'est plus rapporté comme joué : c'est ce mensonge qui faisait
+ * défiler la séance en silence.
+ */
 async function direModele(phrase, vitesse) {
   const r = await VoixModele.dire(phrase, { vitesse });
   if (r.avertissement) afficherNote(r.avertissement);
+  if (!r.joue) audio?.tracer?.("modele_muet", { phrase: phrase.id, cause: r.cause });
   return r;
 }
 
@@ -504,6 +565,12 @@ function texteBilan(b) {
 
 export async function terminerSeance(raison = "sortie") {
   jetonSeance += 1;
+  // Une boucle en attente de réactivation doit être relâchée, sinon
+  // elle reste suspendue pour toujours.
+  if (reprisePromise) { const p = reprisePromise; reprisePromise = null; p.resoudre?.(false); }
+  leverBlocage();
+  Coord.arreter();
+  Coord.rendre(Coord.PROPRIETAIRE.SEANCE);
   const s = seance;
   seance = null;
   exerciceCourant = null;
@@ -517,6 +584,77 @@ export async function terminerSeance(raison = "sortie") {
   document.body.style.overflow = "";
   await S.sauver({ immediat: true });
   peindre();
+}
+
+/* ===================================================================
+   BLOCAGE AUDIO ET RÉACTIVATION
+
+   Règle : on n'avance pas sans son, et on ne bloque pas l'apprenant
+   pour autant. La séance entre dans un état explicite, avec un bouton
+   qui refait exactement ce qu'iOS exige : un appel à `play()` et à la
+   synthèse, DANS le geste utilisateur.
+   =================================================================== */
+
+const LIBELLE_SEGMENT = {
+  premier_son: "le premier message",
+  modele: "la voix du modèle",
+  echo: "ta voix",
+  retour: "le retour"
+};
+
+function poserBlocage(segment, cause) {
+  blocageAudio = { segment, cause: cause || "", le: Date.now() };
+  audio?.tracer?.("audio_bloque", blocageAudio);
+  const quoi = LIBELLE_SEGMENT[segment] || "le son";
+  scene({
+    phase: "Son bloqué",
+    classe: "ko",
+    consigne: `Je n'ai pas réussi à faire entendre ${quoi}.`,
+    note: "Touche « Réactiver le son ». Rien n'est perdu, on reprend au même endroit."
+  });
+  const b = $("sReactiver");
+  if (b) b.hidden = false;
+  const cmd = $("sCmd");
+  if (cmd) cmd.hidden = true;
+}
+
+function leverBlocage() {
+  blocageAudio = null;
+  const b = $("sReactiver");
+  if (b) b.hidden = true;
+  const cmd = $("sCmd");
+  if (cmd) cmd.hidden = false;
+}
+
+/**
+ * Attend que l'utilisateur réactive le son.
+ * Renvoie false si la séance a été quittée entre-temps.
+ */
+function attendreReactivation() {
+  if (reprisePromise) return reprisePromise;
+  reprisePromise = new Promise((resolve) => { reprisePromise.resoudre = resolve; });
+  return reprisePromise;
+}
+
+/**
+ * Réactivation. Appelée DIRECTEMENT depuis le clic, sans `await`
+ * préalable : c'est la seule façon d'obtenir à nouveau l'autorisation
+ * de jouer du son sur iOS.
+ */
+function reactiverSon() {
+  const rapport = Coord.deverrouiller();          // synchrone, dans le geste
+  (async () => {
+    const dev = await Coord.confirmerDeverrouillage(rapport);
+    audio?.tracer?.("reactivation", dev);
+    if (dev.etat === Coord.DEVERROUILLAGE.ECHOUE) {
+      afficherNote("Le son reste bloqué. Vérifie le bouton silencieux et le volume, puis réessaie.");
+      return;
+    }
+    leverBlocage();
+    const p = reprisePromise;
+    reprisePromise = null;
+    p?.resoudre?.(true);
+  })();
 }
 
 /* ===================================================================
@@ -795,7 +933,17 @@ function peindreReglages() {
 
 function brancherInterface() {
   document.querySelectorAll(".ong button").forEach((b) => {
-    b.onclick = () => {
+    b.onclick = async () => {
+      // Une séance ne continue jamais derrière un autre onglet.
+      // Sans cette règle, la boucle avançait pendant que l'utilisateur
+      // appuyait sur « Écouter » dans l'onglet Voix, et deux sources
+      // de son se disputaient la sortie.
+      if (seance && !enPause) {
+        enPause = true;
+        $("sPause").textContent = "Reprendre";
+        await audio?.pause();
+        alerte("Séance mise en pause. Reviens sur l'onglet Séance pour reprendre.");
+      }
       document.querySelectorAll(".ong button").forEach((x) => x.setAttribute("aria-selected", "false"));
       b.setAttribute("aria-selected", "true");
       document.querySelectorAll(".vue").forEach((v) => v.classList.remove("on"));
@@ -805,10 +953,23 @@ function brancherInterface() {
     };
   });
 
+  // Le déverrouillage est demandé AVANT tout `await`. C'est la
+  // correction centrale du blocage audio observé sur iPhone : le
+  // premier son partait après le réveil du contexte, la préparation
+  // de la synthèse et la session de plateforme, donc bien après la
+  // fin de l'activation utilisateur.
   document.querySelectorAll("[data-seance]").forEach((b) => {
-    b.onclick = () => demarrerSeance(b.dataset.seance);
+    b.onclick = () => {
+      const dev = Coord.deverrouiller();
+      demarrerSeance(b.dataset.seance, dev);
+    };
   });
-  $("btnReprendre").onclick = () => demarrerSeance(S.state().reprise.minutes || 20);
+  $("btnReprendre").onclick = () => {
+    const dev = Coord.deverrouiller();
+    demarrerSeance(S.state().reprise.minutes || 20, dev);
+  };
+
+  $("sReactiver").onclick = reactiverSon;
 
   $("sQuitter").onclick = () => terminerSeance("sortie");
   $("sPause").onclick = async () => {
@@ -833,6 +994,7 @@ function brancherInterface() {
   });
 
   $("btnDiag").onclick = lancerDiagnostic;
+  brancherTestsP0();
 
   $("bEcho").onclick = async () => {
     S.state().reglages.echo = !S.state().reglages.echo;
@@ -872,11 +1034,11 @@ function brancherInterface() {
 
   document.addEventListener("click", async (e) => {
     const d = e.target.closest("[data-dire]");
-    if (d) { const p = C.parId(d.dataset.dire); if (p) await VoixModele.dire(p, { vitesse: "normal" }); return; }
+    if (d) { direPhraseManuelle(d.dataset.dire); return; }
     const s = e.target.closest("[data-statut]");
     if (s) { changerStatut(s.dataset.statut); return; }
     const ec = e.target.closest("[data-ecouter]");
-    if (ec) { const b = Tentatives.blobDe(ec.dataset.ecouter); if (b) await jouer(b); else alerte("Cet enregistrement n'est plus en mémoire."); return; }
+    if (ec) { ecouterTentative(ec.dataset.ecouter); return; }
     const su = e.target.closest("[data-supprimer]");
     if (su) { await Tentatives.supprimer(su.dataset.supprimer); peindreEnregistrements(); return; }
   });
@@ -904,6 +1066,137 @@ function changerStatut(id) {
   const r = S.definirStatut(id, suivant, { source });
   if (!r.ok) { alerte(r.raison === "source_obligatoire" ? "Une source est obligatoire." : "Statut refusé."); return; }
   peindreContenu();
+}
+
+/* ===================================================================
+   LECTURES MANUELLES
+
+   Elles passent par le même coordinateur que la séance. Le verrou
+   garantit qu'aucune lecture n'est lancée pendant qu'une autre joue :
+   c'est ce qui produisait « j'appuie sur Écouter, je n'entends rien,
+   et l'exercice suivant démarre ».
+
+   L'appel à la lecture est déclenché SANS `await` préalable, pour
+   rester dans l'activation utilisateur.
+   =================================================================== */
+
+function ecouterTentative(attemptId) {
+  const blob = Tentatives.blobDe(attemptId);
+  if (!blob) { alerte("Cet enregistrement n'est plus en mémoire."); return; }
+  if (seance && !enPause) { alerte("Mets la séance en pause avant d'écouter un enregistrement."); return; }
+
+  const pris = Coord.prendre(Coord.PROPRIETAIRE.MANUEL);
+  if (!pris.ok) { alerte("Un autre son est en cours."); return; }
+
+  // Déverrouillage puis lecture, tous deux amorcés dans le geste.
+  Coord.deverrouiller();
+  Coord.jouerBlob(blob).then((r) => {
+    Coord.rendre(Coord.PROPRIETAIRE.MANUEL);
+    if (!r.demarree) {
+      alerte(`Le son n'a pas démarré. ${r.message || ""} État ${r.readyState}, erreur ${r.codeErreur ?? "aucune"}.`);
+    } else if (!r.terminee) {
+      alerte("La lecture a démarré puis s'est arrêtée avant la fin.");
+    }
+  });
+}
+
+function direPhraseManuelle(idPhrase) {
+  const p = C.parId(idPhrase);
+  if (!p) return;
+  if (seance && !enPause) { alerte("Mets la séance en pause avant d'écouter une phrase."); return; }
+  const pris = Coord.prendre(Coord.PROPRIETAIRE.MANUEL);
+  if (!pris.ok) { alerte("Un autre son est en cours."); return; }
+  Coord.deverrouiller();
+  VoixModele.dire(p, { vitesse: "normal" }).then((r) => {
+    Coord.rendre(Coord.PROPRIETAIRE.MANUEL);
+    if (!r.joue) alerte(`La voix n'a pas démarré. Cause : ${r.cause || "inconnue"}.`);
+  });
+}
+
+/* ===================================================================
+   TESTS P0 ISOLÉS
+
+   Le second appui, celui qui LIT, appelle la lecture directement dans
+   le gestionnaire de clic. Aucune opération asynchrone n'est
+   intercalée : c'est la condition pour qu'iOS autorise le son.
+   =================================================================== */
+
+let dernierAttemptP0 = "";
+
+function brancherTestsP0() {
+  const ligne = (etat, titre, detail) =>
+    `<div class="diag-l" data-etat="${etat}"><div class="diag-p">${
+      { oui: "✓", non: "✕", indisponible: "—", a_verifier: "?" }[etat] || "·"
+    }</div><div class="diag-c"><div>${echapper(titre)}</div>${
+      detail ? `<div class="diag-d">${echapper(detail)}</div>` : ""
+    }</div></div>`;
+
+  $("btnP0Enregistrer").onclick = async () => {
+    if (seance && !enPause) { alerte("Mets la séance en pause avant de lancer ce test."); return; }
+    const el = $("p0Enregistrement");
+    $("btnP0Lire").hidden = true;
+    $("p0Lecture").hidden = true;
+    el.innerHTML = ligne("a_verifier", "Parle maintenant, trois secondes.", "");
+
+    const r = await TestP0.enregistrerSeulement({ onEtape: () => {} });
+    const t = r.tentative;
+    el.innerHTML = [
+      ligne(r.ok ? "oui" : "non", "Enregistrement", r.ok ? "" : r.message),
+      t ? ligne("oui", "Identifiant", t.attemptId) : "",
+      t ? ligne("oui", "Format", t.mime || "inconnu") : "",
+      t ? ligne(t.octets > 0 ? "oui" : "non", "Taille", `${t.octets} octets`) : "",
+      t ? ligne("oui", "Durée de parole", `${t.dureeMs} ms`) : "",
+      ligne("oui", "Micro et contexte audio fermés", "Sortie rendue au système.")
+    ].filter(Boolean).join("");
+
+    if (r.ok) {
+      dernierAttemptP0 = t.attemptId;
+      $("btnP0Lire").hidden = false;
+    }
+  };
+
+  // Appel DIRECT. Pas d'async avant la lecture.
+  $("btnP0Lire").onclick = () => {
+    const el = $("p0Lecture");
+    el.hidden = false;
+    el.innerHTML = ligne("a_verifier", "Lecture demandée…", "");
+    TestP0.lireEnregistrement(dernierAttemptP0).then((r) => {
+      el.innerHTML = [
+        ligne(r.blobPresent ? "oui" : "non", "Enregistrement présent", r.blobPresent ? `${r.octets} octets, ${r.mime}` : r.message),
+        ligne(r.deverrouillage === "reussi" ? "oui" : "non", "Son déverrouillé", r.deverrouillage || ""),
+        ligne("oui", "play() appelée", ""),
+        ligne(r.playAutorisee ? "oui" : "non", "Lecture autorisée", r.playAutorisee ? "La promesse de play() a été tenue." : "Refusée par le navigateur."),
+        ligne(r.demarree ? "oui" : "non", "Lecture démarrée", r.demarree ? "Événement playing reçu." : "Aucun événement playing. Rien n'a été joué."),
+        ligne(r.terminee ? "oui" : "non", "Lecture terminée", r.terminee ? "Événement ended reçu." : ""),
+        ligne("oui", "Durée du média", `${r.dureeMedia ?? 0} s`),
+        ligne("oui", "Durée réelle", `${r.dureeMs} ms`),
+        ligne("oui", "readyState / networkState", `${r.readyState} / ${r.networkState}`),
+        ligne(r.codeErreur ? "non" : "oui", "Code d'erreur média", r.codeErreur ? String(r.codeErreur) : "aucun"),
+        ligne(r.muted || r.volume === 0 ? "non" : "oui", "Volume", `${r.volume}, muet : ${r.muted}`),
+        ligne("oui", "Événements observés", (r.evenements || []).join(", ") || "aucun")
+      ].join("");
+    });
+  };
+
+  // Appel DIRECT également.
+  $("btnP0Voix").onclick = () => {
+    if (seance && !enPause) { alerte("Mets la séance en pause avant de lancer ce test."); return; }
+    const el = $("p0Voix");
+    el.innerHTML = ligne("a_verifier", "Test en cours…", "");
+    TestP0.testerVoixModele("Moien").then((r) => {
+      el.innerHTML = [
+        ligne(r.disponible ? "oui" : "non", "Synthèse disponible", r.disponible ? "" : "Ce navigateur n'a pas de synthèse vocale."),
+        ligne(r.voix ? "oui" : "non", "Voix retenue", r.voix ? `${r.voix} (${r.locale})` : "Aucune voix utilisable."),
+        ligne(r.qualite === "native" ? "oui" : "non", "Qualité", r.qualite),
+        ligne(r.demande ? "oui" : "non", "speak() appelée", ""),
+        ligne(r.onstart ? "oui" : "non", "Démarrage réel", r.onstart ? "Événement start reçu." : "Aucun événement start. Rien n'a été prononcé."),
+        ligne(r.onend ? "oui" : "non", "Fin signalée", ""),
+        ligne(r.onerror ? "non" : "oui", "Erreur", r.cause || "aucune"),
+        ligne("oui", "Durée réelle", `${r.dureeMs} ms`)
+      ].join("");
+      if (!r.ok) alerte(r.message);
+    });
+  };
 }
 
 async function lancerDiagnostic() {

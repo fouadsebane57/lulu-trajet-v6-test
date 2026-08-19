@@ -42,10 +42,48 @@
       GIVING_FEEDBACK vers PLAYING_ECHO, qui a un sens clair.
    =================================================================== */
 
+/* ===================================================================
+   RÈGLE AJOUTÉE APRÈS LE TEST SUR IPHONE RÉEL
+
+   La version précédente laissait explicitement passer :
+
+     échec de l'écho -> on continue vers le modèle
+     modèle silencieux -> on termine quand même
+     -> exercice suivant
+
+   Sur l'appareil, cela donnait : rien n'est audible, et la séance
+   défile. L'apprenant ne peut ni entendre, ni comprendre pourquoi.
+
+   Désormais la restitution rend compte de ce qui a RÉELLEMENT été
+   entendu, et signale un BLOCAGE AUDIO quand un segment obligatoire
+   n'a pas démarré. C'est l'orchestrateur qui décide alors de ne pas
+   consommer l'exercice.
+   =================================================================== */
+
 /** Ce que la restitution a réellement fait. Sert aux tests et au journal. */
 export function rapportVide() {
-  return { sequence: [], echoDemande: false, echoJoue: false, echoResultat: null, interrompu: false };
+  return {
+    sequence: [],
+    echoDemande: false, echoJoue: false, echoResultat: null,
+    retourJoue: false, modeleDemande: false, modeleJoue: false, modeleResultat: null,
+    interrompu: false,
+    // Vrai quand un segment obligatoire n'a pas produit de son.
+    blocageAudio: false,
+    segmentBloque: "",
+    causeBlocage: ""
+  };
 }
+
+/**
+ * Segments dont l'échec bloque l'exercice.
+ *
+ * Le RETOUR est facultatif : il porte une information déjà affichée à
+ * l'écran, et l'exiger bloquerait la séance pour un simple message.
+ * L'ÉCHO et le MODÈLE sont obligatoires : sans eux, l'exercice ne
+ * remplit pas sa fonction, l'apprenant n'entend ni sa production ni la
+ * forme cible.
+ */
+export const SEGMENTS_OBLIGATOIRES = ["echo", "modele"];
 
 /**
  * Joue la restitution.
@@ -69,8 +107,10 @@ export async function restituer(o) {
   const texte = resultat.engine === "local"
     ? (resultat.messageRythme || "Écoute ta voix, puis le modèle.")
     : messageVerdict;
-  await audio.direRetour(texte);
+  const retour = await audio.direRetour(texte);
+  rapport.retourJoue = !!retour?.demarree;
   noter("retour");
+  // Segment facultatif : son échec est noté, il ne bloque pas.
   if (!encore()) { rapport.interrompu = true; return rapport; }
 
   // 2. Sur une réponse jugée correcte par un moteur fiable, on ne
@@ -85,13 +125,31 @@ export async function restituer(o) {
     const res = await rejouer(resultat);
     noter("echo");
     rapport.echoResultat = res || null;
-    rapport.echoJoue = !!(res && res.etat === "terminee");
+    // Un écho « joué » exige d'avoir DÉMARRÉ. Une promesse de lecture
+    // tenue ne prouve rien : elle dit que la lecture a été autorisée.
+    rapport.echoJoue = !!(res && res.demarree && res.etat === "terminee");
     if (!encore()) { rapport.interrompu = true; return rapport; }
+
+    if (!rapport.echoJoue) {
+      // Aucun son de la voix de l'apprenant. On ne poursuit pas comme
+      // si de rien n'était : l'exercice sera déclaré bloqué.
+      rapport.blocageAudio = true;
+      rapport.segmentBloque = "echo";
+      rapport.causeBlocage = res?.message || res?.etat || "echo_muet";
+      return rapport;
+    }
   }
 
   // 4. Le modèle en dernier. C'est la forme cible qui doit rester.
-  //    Un échec de lecture de l'écho ne bloque jamais cette étape.
-  await audio.direModele(item.lb, "lb", 0.85);
+  rapport.modeleDemande = true;
+  const modele = await audio.direModele(item.lb, "lb", 0.85);
   noter("modele");
+  rapport.modeleResultat = modele || null;
+  rapport.modeleJoue = !!modele?.demarree;
+  if (!rapport.modeleJoue) {
+    rapport.blocageAudio = true;
+    rapport.segmentBloque = "modele";
+    rapport.causeBlocage = modele?.cause || "modele_muet";
+  }
   return rapport;
 }

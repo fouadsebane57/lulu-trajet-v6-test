@@ -150,6 +150,42 @@ export const contexteActif = () => audioCtx?.state === "running";
 export const etatContexte = () => audioCtx?.state || "absent";
 
 /**
+ * Ferme le contexte audio et rend les ressources système.
+ *
+ * CORRECTIF ISSU DU TEST SUR IPHONE RÉEL.
+ *
+ * Arrêter les pistes du flux ne suffit pas. Tant que l'AudioContext
+ * vit, iOS considère que la capture est en cours : la sortie reste
+ * routée vers l'écouteur interne au lieu du haut-parleur, et plus rien
+ * n'est audible pour quelqu'un qui ne colle pas le téléphone à son
+ * oreille. Apple documente ce routage après un appel à getUserMedia,
+ * sans exposer de sélection de sortie ; WebKit indique de son côté que
+ * seule la fermeture du contexte rend les ressources audio.
+ *
+ * Le contexte est donc fermé après CHAQUE capture, et recréé au
+ * besoin par contexteBrut().
+ */
+export async function fermerContexte() {
+  if (!audioCtx) return "absent";
+  const avant = audioCtx.state;
+  try { await audioCtx.close(); } catch (_) {}
+  audioCtx = null;
+  return avant;
+}
+
+/**
+ * Libération TOTALE : pistes, puis contexte.
+ * À utiliser avant toute lecture, jamais pendant une capture.
+ */
+export async function rendreAudioAuSysteme() {
+  fermer();
+  const avant = await fermerContexte();
+  // Court répit : iOS ne bascule pas la route de sortie instantanément.
+  await new Promise((r) => setTimeout(r, 180));
+  return { contexteAvant: avant, fluxOuvert: fluxOuvert() };
+}
+
+/**
  * Analyseur de niveau, en dBFS, borné.
  * 0 dB est le maximum numérique, -100 dB le silence.
  * Aucune valeur hors de cet intervalle ne peut sortir d'ici.

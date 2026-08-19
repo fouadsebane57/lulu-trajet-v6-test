@@ -128,11 +128,15 @@ export async function dire(phrase, opt = {}) {
   catch (e) { r = { joue: false, cause: e?.message || "erreur_lecture", dureeMs: 0 }; }
   return {
     joue: !!r?.joue,
+    demarree: !!r?.demarree,
+    terminee: !!r?.terminee,
+    erreur: !!r?.erreur,
     qualite: p.qualite,
     fournisseur: p.id,
     avertissement: avertissement(p.qualite),
     cause: r?.cause || "",
-    dureeMs: r?.dureeMs || 0
+    dureeMs: r?.dureeMs || 0,
+    voix: r?.voix || ""
   };
 }
 
@@ -203,11 +207,27 @@ export function creerSynthese({ tts }) {
     nom: "Synthèse vocale de l'appareil",
     get qualite() { return qualiteDe(); },
     async peutDire() { return !!tts.dispo?.() && qualiteDe() !== QUALITE.AUCUNE; },
+
+    /**
+     * Défaut corrigé : cette fonction retournait `joue: true` sans
+     * jamais savoir si un son avait été produit. Un moteur muet était
+     * donc rapporté comme ayant parlé, et la séance avançait.
+     *
+     * `joue` vaut désormais exactement ce que la synthèse a prouvé :
+     * l'énoncé a démarré. Sans démarrage, c'est faux, avec sa cause.
+     */
     async dire(phrase, { vitesse = "normal" } = {}) {
       const facteur = vitesse === "lent" ? 0.75 : 1;
-      const t0 = Date.now();
-      await tts.dire(phrase.lb, "lb", facteur);
-      return { joue: true, cause: "", dureeMs: Date.now() - t0 };
+      const r = await tts.dire(phrase.lb, "lb", facteur);
+      return {
+        joue: !!r?.demarree,
+        demarree: !!r?.demarree,
+        terminee: !!r?.terminee,
+        erreur: !!r?.erreur,
+        cause: r?.cause || (r?.demarree ? "" : "pas_de_demarrage"),
+        dureeMs: r?.dureeMs || 0,
+        voix: r?.voix || ""
+      };
     }
   };
 }

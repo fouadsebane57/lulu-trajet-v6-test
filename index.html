@@ -123,6 +123,28 @@
     <button class="bouton pleine" id="btnDiag" style="margin-bottom:14px"><div class="b-t">Lancer le diagnostic</div><div class="b-d">Environ trente secondes. Parle quand on te le demande.</div></button>
     <div class="diag" id="resultatDiag"><div class="diag-l"><div class="diag-p">·</div><div class="diag-c">Test non lancé.</div></div></div>
 
+    <div class="h">Test du son, isolé</div>
+    <div class="p">Deux tests indépendants, à faire <b>à l'arrêt</b>. Ils ne lancent aucune séance, aucun exercice et aucune reconnaissance. Ils servent à savoir exactement où le son s'arrête.</div>
+
+    <div class="h2">1. Mon enregistrement</div>
+    <button class="bouton pleine" id="btnP0Enregistrer">
+      <div class="b-t">Commencer l'enregistrement</div>
+      <div class="b-d">Parle trois secondes. Aucune lecture automatique.</div>
+    </button>
+    <div class="diag" id="p0Enregistrement" style="margin-top:10px"><div class="diag-l"><div class="diag-p">·</div><div class="diag-c">Test non lancé.</div></div></div>
+    <button class="bouton pleine" id="btnP0Lire" hidden style="margin-top:10px">
+      <div class="b-t">Lire mon enregistrement</div>
+      <div class="b-d">Deuxième appui, c'est lui qui autorise le son</div>
+    </button>
+    <div class="diag" id="p0Lecture" hidden style="margin-top:10px"></div>
+
+    <div class="h2">2. La voix du modèle</div>
+    <button class="bouton pleine" id="btnP0Voix">
+      <div class="b-t">Tester uniquement la voix du modèle</div>
+      <div class="b-d">Une phrase courte, et le détail de ce qui s'est passé</div>
+    </button>
+    <div class="diag" id="p0Voix" style="margin-top:10px"><div class="diag-l"><div class="diag-p">·</div><div class="diag-c">Test non lancé.</div></div></div>
+
     <div class="h">Ma voix</div>
     <div class="avis" id="avisMaVoix"></div>
     <div class="opt">
@@ -238,7 +260,11 @@
     <div class="s-note" id="sNote"></div>
   </div>
 
-  <div class="s-cmd">
+  <button class="s-b principal" id="sReactiver" hidden style="margin-top:12px;padding:24px 8px">
+    Réactiver le son
+  </button>
+
+  <div class="s-cmd" id="sCmd">
     <button class="s-b" id="sRepeter">Répète</button>
     <button class="s-b principal" id="sPause">Pause</button>
     <button class="s-b" id="sSuivant">Suivant</button>

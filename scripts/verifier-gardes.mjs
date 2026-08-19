@@ -116,6 +116,85 @@ const MUTATIONS = [
     de: 'if (statut === "verified" && !String(source).trim()) {\n    return { ok: false, raison: "source_obligatoire" };\n  }',
     vers: "// mutation : la source n'est plus exigée"
   },
+  /* ---- Gardes audio, issues du test sur iPhone réel ---- */
+
+  {
+    nom: "La synthèse déclare un démarrage qu'elle n'a pas observé",
+    defaut: "Un moteur muet est rapporté comme ayant parlé, et la séance défile en silence.",
+    fichier: "src/audio/tts.js",
+    de: "u.onstart = () => {\n      r.demarree = true;",
+    vers: "r.demarree = true;\n    u.onstart = () => {"
+  },
+  {
+    nom: "La voix du modèle retourne joué sans preuve",
+    defaut: "Le défaut exact observé : joue: true sans savoir si un son est sorti.",
+    fichier: "src/audio/voix-modele.js",
+    de: "joue: !!r?.demarree,",
+    vers: "joue: true,"
+  },
+  {
+    nom: "Un écho muet laisse la restitution continuer",
+    defaut: "L'apprenant n'entend pas sa voix, et l'exercice se termine quand même.",
+    fichier: "src/core/restitution.js",
+    de: "if (!rapport.echoJoue) {",
+    vers: "if (false) {"
+  },
+  {
+    nom: "Un modèle muet n'est plus signalé",
+    defaut: "La forme cible n'est pas entendue, et l'exercice est consommé.",
+    fichier: "src/core/restitution.js",
+    de: "if (!rapport.modeleJoue) {",
+    vers: "if (false) {"
+  },
+  {
+    nom: "Une promesse de play tenue vaut audition",
+    defaut: "Autorisé à démarrer est confondu avec réellement démarré.",
+    fichier: "src/audio/coordinateur.js",
+    de: 'if (e.type === "playing") { demarree = true; if (!t0) t0 = Date.now(); }',
+    vers: "// mutation : le démarrage réel n'est plus observé"
+  },
+  {
+    nom: "Deux sons peuvent jouer en même temps",
+    defaut: "L'écoute manuelle et la séance se disputent la sortie audio.",
+    fichier: "src/audio/coordinateur.js",
+    de: "if (detenteur !== PROPRIETAIRE.AUCUN && detenteur !== qui) {",
+    vers: "if (false) {"
+  },
+  {
+    nom: "L'ObjectURL est révoquée avant la fin de la lecture",
+    defaut: "Le son est coupé en cours de route par la lecture suivante.",
+    fichier: "src/audio/coordinateur.js",
+    de: 'if (urlCourante) { URL.revokeObjectURL(urlCourante); }\n    urlCourante = nouvelleUrl;',
+    vers: 'urlCourante = nouvelleUrl;\n    URL.revokeObjectURL(nouvelleUrl);'
+  },
+  {
+    nom: "Le contexte audio n'est plus rendu au système après capture",
+    defaut: "Sur iOS, la sortie reste routée vers l'écouteur et plus rien n'est audible.",
+    fichier: "src/audio/machine.js",
+    de: "const rendu = await Micro.rendreAudioAuSysteme();\n        noter(\"audio_rendu_apres_capture\", rendu);",
+    vers: "await Micro.liberer();"
+  },
+  {
+    nom: "Le déverrouillage audio attend avant d'appeler play",
+    defaut: "L'activation utilisateur est perdue, iOS refuse tout son.",
+    fichier: "src/app.js",
+    de: "    b.onclick = () => {\n      const dev = Coord.deverrouiller();\n      demarrerSeance(b.dataset.seance, dev);\n    };",
+    vers: "    b.onclick = async () => {\n      await new Promise((r) => setTimeout(r, 0));\n      demarrerSeance(b.dataset.seance, Coord.deverrouiller());\n    };"
+  },
+  {
+    nom: "La séance continue derrière un autre onglet",
+    defaut: "La boucle avance pendant que l'utilisateur écoute un enregistrement.",
+    fichier: "src/app.js",
+    de: "      if (seance && !enPause) {\n        enPause = true;\n        $(\"sPause\").textContent = \"Reprendre\";\n        await audio?.pause();",
+    vers: "      if (false) {\n        enPause = true;\n        $(\"sPause\").textContent = \"Reprendre\";"
+  },
+  {
+    nom: "Un exercice est consommé malgré un blocage audio",
+    defaut: "Exactement le comportement observé : aucun son, et la séance défile.",
+    fichier: "src/app.js",
+    de: "    if (issue === ISSUE.AUDIO_BLOQUE) {",
+    vers: "    if (false) {"
+  },
   {
     nom: "Un fournisseur de prononciation non luxembourgeois est accepté",
     defaut: "Un moteur allemand produit un score de prononciation présenté comme fiable.",
@@ -127,6 +206,31 @@ const MUTATIONS = [
 
 const lire = (f) => fs.readFileSync(path.join(RACINE, f), "utf8");
 const ecrire = (f, t) => fs.writeFileSync(path.join(RACINE, f), t);
+
+/* ------------------------------------------------------------------
+   FILET DE SÉCURITÉ
+
+   Ce script modifie volontairement le code source. Une interruption
+   externe, un délai dépassé ou un Ctrl-C au mauvais moment laissait le
+   dépôt dans un état muté, sans que rien ne le signale. C'est arrivé.
+
+   Tout fichier touché est donc mémorisé, et restauré quoi qu'il
+   arrive, y compris sur signal.
+   ------------------------------------------------------------------ */
+const enCours = new Map();
+
+function restaurerTout() {
+  for (const [f, t] of enCours) {
+    try { ecrire(f, t); } catch (_) {}
+  }
+  enCours.clear();
+}
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => { restaurerTout(); process.exit(130); });
+}
+process.on("exit", restaurerTout);
+process.on("uncaughtException", (e) => { restaurerTout(); console.error(e); process.exit(2); });
 
 function suitePasse() {
   try {
@@ -164,11 +268,14 @@ for (const m of MUTATIONS) {
   for (const partie of parties) {
     modifies.set(partie.fichier, modifies.get(partie.fichier).replace(partie.de, partie.vers));
   }
+  // Mémorisé AVANT écriture : une interruption pendant le test doit
+  // pouvoir remettre le fichier en état.
+  for (const [f, t] of originaux) enCours.set(f, t);
   for (const [f, t] of modifies) ecrire(f, t);
 
   const passeQuandMeme = suitePasse();
 
-  for (const [f, t] of originaux) ecrire(f, t);   // restauration immédiate
+  restaurerTout();                                // restauration immédiate
 
   if (passeQuandMeme) {
     console.log(`  ÉCHEC  ${m.nom}\n         La suite passe alors que le défaut est présent. Garde insuffisante.`);

@@ -46,13 +46,14 @@ const OBLIGATOIRES = [
   // vingt et un tests ne se lançaient plus dans l'archive extraite.
   "src/core/config.js", "src/core/restitution.js",
   "src/audio/tentative.js", "src/audio/voix-modele.js", "src/audio/machine.js",
+  "src/audio/coordinateur.js", "src/audio/test-p0.js", "src/audio/lecture.js",
   "src/speech/engine.js", "src/speech/provider.js", "src/speech/prononciation.js",
   "src/speech/providers/luxasr.js", "src/speech/providers/repli.js",
   "src/platform/index.js", "src/ui/diagnostic.js",
   "supabase/functions/luxasr-transcribe/index.ts",
   "docs/V6_ARCHITECTURE.md", "docs/V6_CONTENU.md", "docs/V6_VOIX.md",
   "docs/V6_MOBILE.md", "docs/V6_CONFIDENTIALITE.md", "docs/V6_DECISIONS.md",
-  "docs/TEST_IPHONE.md", "README.md"
+  "docs/TEST_IPHONE.md", "docs/V6_AUDIO_P0.md", "README.md"
 ];
 
 for (const f of OBLIGATOIRES) {

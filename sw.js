@@ -9,7 +9,7 @@
    Le numéro de version doit changer à chaque livraison, sinon les
    téléphones gardent l'ancienne.
    =================================================================== */
-const VERSION = "lulu-v6-0-0";
+const VERSION = "lulu-v6-0-1-audio";
 
 const FICHIERS = [
   "./", "./index.html", "./styles.css", "./manifest.webmanifest",
@@ -23,7 +23,7 @@ const FICHIERS = [
   "./src/audio/machine.js", "./src/audio/mic.js", "./src/audio/recorder.js",
   "./src/audio/formats.js", "./src/audio/vad.js", "./src/audio/lecture.js",
   "./src/audio/rythme.js", "./src/audio/tts.js", "./src/audio/tentative.js",
-  "./src/audio/voix-modele.js",
+  "./src/audio/voix-modele.js", "./src/audio/coordinateur.js", "./src/audio/test-p0.js",
   "./src/speech/engine.js", "./src/speech/score.js", "./src/speech/normalize.js",
   "./src/speech/erreurs.js", "./src/speech/provider.js", "./src/speech/prononciation.js",
   "./src/speech/providers/index.js", "./src/speech/providers/luxasr.js", "./src/speech/providers/repli.js",

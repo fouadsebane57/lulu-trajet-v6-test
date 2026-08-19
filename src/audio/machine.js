@@ -40,7 +40,8 @@
 import * as Micro from "./mic.js";
 import * as Voix from "./tts.js";
 import { capturer } from "./recorder.js";
-import { jouer, LECTURE } from "./lecture.js";
+import { LECTURE } from "./lecture.js";
+import * as Coord from "./coordinateur.js";
 
 export const ETAT = {
   REPOS: "IDLE",
@@ -131,7 +132,10 @@ export const MOTIF = {
  *                            que les tests vérifient qu'elle est bien
  *                            appelée, une seule fois, avec le bon Blob.
  */
-export function creer({ onEtat, onJournal, lecteur = jouer } = {}) {
+export function creer({ onEtat, onJournal, lecteur = null } = {}) {
+  // Le son passe par le coordinateur, propriétaire unique. Le lecteur
+  // reste injectable pour que les tests vérifient l'appel exact.
+  const lire = lecteur || ((blob, opt) => Coord.jouerBlob(blob, opt));
   let etat = ETAT.REPOS;
   let occupe = false;              // verrou anti double séance
   let jeton = 0;                   // identifiant de la séance courante
@@ -188,21 +192,49 @@ export function creer({ onEtat, onJournal, lecteur = jouer } = {}) {
     /** Le micro est-il ouvert alors qu'il ne devrait pas l'être ? */
     microIllegitime: () => Micro.fluxOuvert() && !MICRO_AUTORISE.has(etat),
 
-    /** Démarre une séance. Refuse s'il y en a déjà une. P0.8. */
-    async demarrer() {
+    /**
+     * Démarre une séance. Refuse s'il y en a déjà une. P0.8.
+     *
+     * @param {object} o.deverrouillage  rapport produit SYNCHRONEMENT
+     *   dans le geste utilisateur, par le coordinateur audio. Sans
+     *   lui, iOS refuse tout son : au moment où l'on arrive ici, la
+     *   pile d'appels n'est plus considérée comme issue du toucher.
+     */
+    async demarrer({ deverrouillage = null } = {}) {
       if (occupe) { noter("demarrage_refuse", { cause: "session_deja_active" }); return { ok: false, cause: "session_deja_active" }; }
       occupe = true;
       annulation = false;
       jeton += 1;
       etat = ETAT.REPOS;
       aller(ETAT.PREPARATION);
-      // Nous sommes dans un geste utilisateur : seul moment où iOS
-      // accepte de démarrer le moteur audio. On l'attend vraiment.
-      const audioPret = await Micro.reveiller();
+
+      // Le déverrouillage a été DEMANDÉ dans le geste. On ne fait ici
+      // que constater son résultat.
+      const dev = deverrouillage
+        ? await Coord.confirmerDeverrouillage(deverrouillage)
+        : Coord.etatDeverrouillage();
+      noter("deverrouillage", dev);
+
       await Voix.preparer();
-      noter("preparation", { audioPret, jeton });
-      if (!audioPret) { aller(ETAT.ERREUR, { cause: "contexte_audio_endormi" }); occupe = false; return { ok: false, cause: "contexte_audio_endormi" }; }
-      return { ok: true, jeton };
+      noter("preparation", { jeton, deverrouillage: dev.etat });
+
+      if (dev.etat === Coord.DEVERROUILLAGE.ECHOUE) {
+        aller(ETAT.ERREUR, { cause: "audio_verrouille" });
+        occupe = false;
+        return { ok: false, cause: "audio_verrouille", deverrouillage: dev };
+      }
+      return { ok: true, jeton, deverrouillage: dev };
+    },
+
+    /**
+     * Le contexte audio de CAPTURE, réveillé juste avant d'écouter.
+     * Il n'est plus réveillé au démarrage de la séance : le faire
+     * consommait le geste utilisateur avant le premier son.
+     */
+    async preparerCapture() {
+      const pret = await Micro.reveiller();
+      noter("contexte_capture", { pret, etat: Micro.etatContexte() });
+      return pret;
     },
 
     vivant: (j) => occupe && j === jeton && !annulation && etat !== ETAT.TERMINE && etat !== ETAT.INTERROMPU,
@@ -265,25 +297,34 @@ export function creer({ onEtat, onJournal, lecteur = jouer } = {}) {
 
     /* ---------- Opérations, chacune bornée par un état ---------- */
 
+    /* Chaque énoncé rend compte de son DÉMARRAGE RÉEL.
+       Ces trois fonctions retournaient `true` dès que la promesse de
+       synthèse se résolvait, y compris quand rien n'avait été
+       prononcé. C'est la source du « la séance avance en silence »
+       observé sur iPhone. */
+
     /** Modèle prononcé. Passe en PLAYING_PROMPT. */
     async direModele(texte, langue = "lb", facteur = 1) {
-      if (!aller(ETAT.MODELE)) return false;
-      await Voix.dire(texte, langue, facteur);
-      return true;
+      if (!aller(ETAT.MODELE)) return { ok: false, demarree: false, cause: `etat_${etat}` };
+      const r = await Voix.dire(texte, langue, facteur);
+      noter("modele", { demarree: r.demarree, terminee: r.terminee, cause: r.cause });
+      return { ok: !!r.demarree, ...r };
     },
 
     /** Consigne parlée en français. Même état que le modèle. */
     async direConsigne(texte) {
-      if (!aller(ETAT.MODELE)) return false;
-      await Voix.dire(texte, "fr");
-      return true;
+      if (!aller(ETAT.MODELE)) return { ok: false, demarree: false, cause: `etat_${etat}` };
+      const r = await Voix.dire(texte, "fr");
+      noter("consigne", { demarree: r.demarree, terminee: r.terminee, cause: r.cause });
+      return { ok: !!r.demarree, ...r };
     },
 
     /** Retour pédagogique. Passe en GIVING_FEEDBACK. */
     async direRetour(texte) {
-      if (!aller(ETAT.RETOUR)) return false;
-      await Voix.dire(texte, "fr");
-      return true;
+      if (!aller(ETAT.RETOUR)) return { ok: false, demarree: false, cause: `etat_${etat}` };
+      const r = await Voix.dire(texte, "fr");
+      noter("retour", { demarree: r.demarree, terminee: r.terminee, cause: r.cause });
+      return { ok: !!r.demarree, ...r };
     },
 
     /**
@@ -329,9 +370,12 @@ export function creer({ onEtat, onJournal, lecteur = jouer } = {}) {
         aller(ETAT.ERREUR, { cause: "capture" });
         r = { ok: false, errorKind: "mic", error: err?.message || "Capture impossible.", blob: null, vad: null };
       } finally {
-        // Le micro est refermé quel que soit le chemin de sortie.
-        await Micro.liberer();
-        noter("micro_libere_apres_capture", { encoreOuvert: Micro.fluxOuvert() });
+        // Le micro est refermé quel que soit le chemin de sortie, ET
+        // le contexte audio est fermé. Sans cette seconde opération,
+        // iOS garde la sortie routée vers l'écouteur interne et plus
+        // rien n'est audible pour la suite de la séance.
+        const rendu = await Micro.rendreAudioAuSysteme();
+        noter("audio_rendu_apres_capture", rendu);
       }
       aller(ETAT.TRAITEMENT);
       return r;
@@ -351,16 +395,19 @@ export function creer({ onEtat, onJournal, lecteur = jouer } = {}) {
         noter("echo_refuse", { depuis: etat });
         return { etat: LECTURE.AUCUN_AUDIO, message: `Écho impossible depuis l'état ${etat}.`, demarree: false, dureeMs: 0 };
       }
-      // Le micro est libéré avant toute lecture : sur iOS, un flux
-      // encore ouvert peut dégrader ou dérouter la sortie audio.
-      await Micro.liberer();
+      // Micro ET contexte audio rendus avant toute lecture. Un flux
+      // encore ouvert, ou un contexte encore vivant, déroute la sortie
+      // vers l'écouteur sur iOS.
+      const rendu = await Micro.rendreAudioAuSysteme();
+      noter("audio_rendu_avant_echo", rendu);
       let r;
       try {
-        r = await lecteur(blob, { annule: () => annulation });
+        r = await lire(blob, { annule: () => annulation });
       } catch (err) {
-        r = { etat: LECTURE.DEMARREE_INTERROMPUE, message: err?.message || "Lecture interrompue.", demarree: false, dureeMs: 0 };
+        r = { etat: LECTURE.DEMARREE_INTERROMPUE, message: err?.message || "Lecture interrompue.",
+              autorise: false, demarree: false, terminee: false, dureeMs: 0 };
       }
-      noter("echo", { resultat: r.etat, demarree: r.demarree, dureeMs: r.dureeMs });
+      noter("echo", { resultat: r.etat, autorise: r.autorise, demarree: r.demarree, terminee: r.terminee, dureeMs: r.dureeMs });
       return r;
     },
 

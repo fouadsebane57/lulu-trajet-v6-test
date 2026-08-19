@@ -230,3 +230,125 @@ test("aucun message générique du type « une erreur est survenue »", () => {
   }
   assert.deepEqual(coupables, [], `message non actionnable : ${coupables.join(", ")}`);
 });
+
+/* ===================================================================
+   9. AUDIO · RÈGLES ISSUES DU TEST SUR IPHONE RÉEL
+   =================================================================== */
+
+test("un seul module crée des éléments audio", () => {
+  // Défaut corrigé : chaque lecture créait un `new Audio()`. Sur iOS,
+  // un élément neuf, créé après plusieurs `await`, n'a pas
+  // l'autorisation de jouer.
+  const coupables = [];
+  for (const f of sourcesJs()) {
+    if (f.chemin.endsWith("audio/coordinateur.js")) continue;
+    if (f.chemin.endsWith("audio/lecture.js")) continue;   // conservé, non utilisé en séance
+    const c = codeNu(f.texte);
+    if (/new Audio\s*\(/.test(c)) coupables.push(f.chemin);
+  }
+  assert.deepEqual(coupables, [],
+    `création d'élément audio hors du coordinateur : ${coupables.join(", ")}`);
+});
+
+test("le coordinateur conserve un élément unique et persistant", () => {
+  const s = codeNu(fs.readFileSync(path.join(RACINE, "src/audio/coordinateur.js"), "utf8"));
+  assert.match(s, /if \(element\) return element;/,
+    "l'élément audio n'est plus réutilisé d'une lecture à l'autre");
+});
+
+test("le déverrouillage audio est demandé sans await préalable", () => {
+  // Sur iOS, l'autorisation de jouer n'existe que dans la pile
+  // d'appels issue du toucher. Un `await` avant l'appel la perd.
+  const s = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  const bloc = s.match(/b\.onclick = \(\) => \{\s*const dev = Coord\.deverrouiller\(\);/);
+  assert.ok(bloc, "le déverrouillage n'est plus la première instruction du clic");
+  const fn = codeNu(fs.readFileSync(path.join(RACINE, "src/audio/coordinateur.js"), "utf8"));
+  const corps = fn.slice(fn.indexOf("export function deverrouiller()"), fn.indexOf("export async function confirmerDeverrouillage"));
+  assert.ok(!/await/.test(corps), "deverrouiller() contient un await, l'activation utilisateur sera perdue");
+});
+
+test("la synthèse ne peut pas déclarer un démarrage sans onstart", () => {
+  const s = fs.readFileSync(path.join(RACINE, "src/audio/tts.js"), "utf8");
+  // Une seule affectation de `demarree` à vrai, et elle est dans onstart.
+  const affectations = s.match(/r\.demarree\s*=\s*true/g) || [];
+  assert.equal(affectations.length, 1, "plusieurs chemins mettent demarree à vrai");
+  const onstart = s.slice(s.indexOf("u.onstart"), s.indexOf("u.onend"));
+  assert.match(onstart, /r\.demarree = true/, "demarree n'est plus posé par onstart");
+});
+
+test("la voix du modèle ne déclare jamais joué sans démarrage prouvé", () => {
+  // On retire d'abord commentaires et gabarits : le commentaire qui
+  // documente le défaut corrigé contient forcément le motif interdit.
+  const brut = fs.readFileSync(path.join(RACINE, "src/audio/voix-modele.js"), "utf8");
+  const s = brut
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+  assert.ok(!/joue:\s*true/.test(s), "un chemin retourne joue: true en dur");
+  assert.match(brut, /joue:\s*!!r\?\.demarree/, "joue ne dérive plus du démarrage réel");
+});
+
+test("le contexte audio est rendu au système après chaque capture", () => {
+  // Sans cette fermeture, iOS garde la sortie routée vers l'écouteur
+  // interne et plus rien n'est audible ensuite.
+  const mic = fs.readFileSync(path.join(RACINE, "src/audio/mic.js"), "utf8");
+  assert.match(mic, /export async function fermerContexte/, "la fermeture du contexte a disparu");
+  assert.match(mic, /export async function rendreAudioAuSysteme/, "la libération complète a disparu");
+
+  // Deux points d'appel distincts, et chacun compte. Vérifier
+  // seulement la présence du nom laissait passer la suppression de
+  // l'un des deux : l'autre suffisait à faire passer le test.
+  const machine = fs.readFileSync(path.join(RACINE, "src/audio/machine.js"), "utf8");
+
+  const capture = machine.slice(machine.indexOf("async capturerReponse"), machine.indexOf("entrerEcoute()"));
+  assert.match(capture, /rendreAudioAuSysteme\(\)/,
+    "l'audio n'est plus rendu au système après la capture");
+  assert.ok(!/Micro\.liberer\(\)/.test(capture),
+    "la capture se contente d'arrêter les pistes, sans fermer le contexte audio");
+
+  const echo = machine.slice(machine.indexOf("async rejouerVoix"), machine.indexOf("async libererMicro"));
+  assert.match(echo, /rendreAudioAuSysteme\(\)/,
+    "l'audio n'est plus rendu au système avant l'écho");
+});
+
+test("la restitution signale un blocage au lieu de poursuivre en silence", () => {
+  const s = fs.readFileSync(path.join(RACINE, "src/core/restitution.js"), "utf8");
+  assert.match(s, /rapport\.blocageAudio = true/, "le blocage audio n'est plus signalé");
+  assert.match(s, /segmentBloque/, "le segment fautif n'est plus nommé");
+});
+
+test("un blocage audio empêche de consommer l'exercice", () => {
+  const s = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  assert.match(s, /ISSUE\.AUDIO_BLOQUE/, "l'issue de blocage audio a disparu");
+  // La consommation ne doit pas être atteignable depuis un blocage.
+  const boucle = s.slice(s.indexOf("async function boucle"), s.indexOf("function issueCourante"));
+  const posBlocage = boucle.indexOf("ISSUE.AUDIO_BLOQUE");
+  const posConsommation = boucle.indexOf("Sess.terminerExercice");
+  assert.ok(posBlocage >= 0 && posBlocage < posConsommation,
+    "le blocage audio n'est pas traité avant la consommation de l'exercice");
+});
+
+test("les tests P0 isolés n'importent aucune logique de séance", () => {
+  // Contrainte structurelle, pas déclarative : le module ne PEUT pas
+  // démarrer une séance, écrire une progression ni appeler un moteur
+  // de reconnaissance, faute d'y avoir accès.
+  const s = fs.readFileSync(path.join(RACINE, "src/audio/test-p0.js"), "utf8");
+  const interdits = ["core/session", "core/state", "core/scheduler", "speech/engine", "speech/provider", "content/"];
+  for (const i of interdits) {
+    assert.ok(!s.includes(i), `test-p0.js importe ${i}, il peut donc interférer avec la séance`);
+  }
+});
+
+test("l'écoute manuelle et le diagnostic passent par le même arbitre", () => {
+  const s = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  assert.match(s, /Coord\.prendre\(Coord\.PROPRIETAIRE\.MANUEL\)/,
+    "l'écoute manuelle ne prend plus le verrou audio");
+  assert.match(s, /Coord\.rendre\(Coord\.PROPRIETAIRE\.SEANCE\)/,
+    "la séance ne rend plus le verrou audio");
+});
+
+test("changer d'onglet pendant une séance la met en pause", () => {
+  const s = fs.readFileSync(path.join(RACINE, "src/app.js"), "utf8");
+  const nav = s.slice(s.indexOf('document.querySelectorAll(".ong button")'), s.indexOf('document.querySelectorAll("[data-seance]")'));
+  assert.match(nav, /audio\?\.pause\(\)/,
+    "la séance peut continuer derrière un autre onglet");
+});

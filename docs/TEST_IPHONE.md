@@ -1,151 +1,107 @@
 # Test sur iPhone
 
-À faire **à l'arrêt**, moteur coupé, une seule fois. Compte vingt
-minutes. Note ce qui bloque, avec le numéro de l'étape.
+**Version audio corrigée. Fais ces cinq étapes AVANT tout le reste.**
+
+À faire à l'arrêt, moteur coupé. Compte dix minutes.
+
+**Vide d'abord le cache de Safari**, ou ouvre une fenêtre privée
+neuve : sinon le service worker sert l'ancienne version.
 
 ---
 
-## 1. Installer
+## Étape 1 · Le son de base
 
-Ouvre l'adresse **dans Safari**, pas dans une autre application.
-Bouton Partager, puis « Sur l'écran d'accueil ». Lance l'application
-depuis l'icône.
+Onglet **Voix**, section **Test du son, isolé**, deuxième bouton :
+**Tester uniquement la voix du modèle**.
 
-**Attendu :** l'écran d'accueil affiche « LULU Trajet » et trois
-boutons de séance.
+**Renvoie-moi les huit lignes affichées.** La ligne décisive est
+« Démarrage réel ».
 
----
-
-## 2. Lancer le diagnostic
-
-Onglet Voix, bouton « Lancer le diagnostic ». Autorise le micro quand
-iOS le demande. Parle quand l'application te le demande.
-
-**Attendu :** une liste de lignes, chacune avec ✓, ✕, — ou ?
-
-**Note les lignes ✕.** Chacune dit sa cause et l'action à faire.
-
-Lignes qui doivent être ✓ :
-- Adresse sécurisée
-- Micro autorisé
-- Le micro reçoit du son
-- Format d'enregistrement
-- Enregistrement
-- Réécoute de ta voix
-- Micro refermé après le test
-
-Lignes qui seront ✕ ou —, et c'est normal :
-- Reconnaissance luxembourgeoise → autorisation non obtenue
-- Correction phonétique → aucun outil ne sait le faire
-- Voix du modèle → voix allemande, pas luxembourgeoise
-- Audio écran verrouillé → limite du navigateur
+- ✓ Démarrage réel → la synthèse fonctionne.
+- ✕ Démarrage réel → rien n'est prononcé, et la cause est affichée.
 
 ---
 
-## 3. Écouter un exemple
+## Étape 2 · Mon enregistrement, sans lecture
 
-Onglet Phrases, bouton « Écouter » sur la première phrase.
+Même section, premier bouton : **Commencer l'enregistrement**.
+Parle trois secondes.
 
-**Attendu :** tu entends la phrase. Un avertissement précise que la
-voix est allemande.
+**Renvoie-moi les six lignes.** Attendu : format `audio/mp4`, taille
+supérieure à 10 000 octets, micro et contexte audio fermés.
 
-**Si tu n'entends rien :** vérifie le bouton silencieux sur le côté du
-téléphone, puis le volume.
-
----
-
-## 4. Faire une séance de dix minutes
-
-Onglet Séance, bouton « 10 minutes ». Pose le téléphone, écran allumé.
-Réponds à voix haute à chaque fois qu'on te le demande.
-
-**Attendu :** la séance enchaîne seule. Après chaque réponse : le
-retour, ta voix, puis le modèle.
-
-**Le point à vérifier absolument : entends-tu bien TA voix, et est-ce
-bien la phrase que tu viens de dire ?**
+Aucun son ne doit sortir à cette étape. C'est normal et voulu.
 
 ---
 
-## 5. Tester Pause et Suivant
+## Étape 3 · Lire mon enregistrement
 
-Pendant la séance, appuie sur Pause, attends cinq secondes, reprends.
-Puis appuie sur Suivant.
+Un bouton **Lire mon enregistrement** est apparu. Appuie dessus.
 
-**Attendu :** Pause coupe le son immédiatement. Reprendre continue au
-même endroit. Suivant passe à l'exercice d'après, sans répéter le
-même.
+**C'est l'étape la plus importante du test.**
 
----
+**Renvoie-moi les treize lignes.** Les trois qui comptent :
 
-## 6. Tester une interruption
+- **Lecture autorisée** : le navigateur a accepté de démarrer.
+- **Lecture démarrée** : le son est réellement parti.
+- **Lecture terminée** : il est allé au bout.
 
-Pendant la séance, quitte l'application par le bouton d'accueil.
-Attends dix secondes. Reviens.
+Et surtout : **as-tu entendu ta voix, oui ou non ?**
 
-**Attendu :** la séance s'est mise en pause. Elle ne repart pas toute
-seule.
-
----
-
-## 7. Verrouiller l'écran
-
-Pendant la séance, verrouille l'écran.
-
-**Attendu, et c'est la limite connue :** la voix s'arrête. Déverrouille
-et reprends.
-
-**Note le comportement exact :** s'arrête tout de suite, après quelques
-secondes, ou pas du tout.
+Si les trois lignes sont ✓ et que tu n'entends rien, le son sort
+probablement par l'écouteur du haut de l'écran. Colle le téléphone à
+ton oreille et recommence pour le confirmer. Cette information est
+décisive.
 
 ---
 
-## 8. Tester en Bluetooth
+## Étape 4 · Le premier son d'une séance
 
-Connecte le téléphone à la voiture, moteur coupé. Relance une séance de
-dix minutes.
+Onglet **Séance**, bouton **10 minutes**.
 
-**Attendu :** le son sort par les haut-parleurs. Quand l'application
-t'écoute, le son passe en mono, plus sourd. C'est le fonctionnement du
-Bluetooth, pas un défaut.
+Deux issues, toutes deux utiles :
 
-**Note :** la reconnaissance de ta voix marche-t-elle mieux ou moins
-bien qu'avec le micro du téléphone ?
+- tu entends « On commence, réponds à voix haute » → le déverrouillage
+  fonctionne ;
+- l'écran affiche **Son bloqué** avec un bouton **Réactiver le son** →
+  le déverrouillage a échoué. Appuie sur le bouton et dis-moi si le
+  son revient.
 
----
-
-## 9. Tester hors ligne
-
-Active le mode avion. Lance une séance de dix minutes.
-
-**Attendu :** tout fonctionne. Écoute, répétition, écho, modèle. Le
-bilan précise qu'aucune réponse n'a pu être vérifiée.
-
-**Si l'application ne se lance pas hors ligne :** c'est un vrai
-problème, note-le.
+**La séance ne doit plus jamais défiler en silence.** Si elle le fait,
+dis-le-moi immédiatement : le correctif serait incomplet.
 
 ---
 
-## 10. Vérifier la progression
+## Étape 5 · Un tour complet
 
-Onglet Progrès.
+Laisse la séance aller jusqu'à une question. Réponds à voix haute.
 
-**Attendu :** des chiffres qui correspondent à ce que tu viens de
-faire. « Rencontrées » a augmenté. « Solides » reste à zéro : c'est
-normal, une phrase n'est solide qu'après plusieurs jours.
+Attendu, dans cet ordre : le retour, **ta voix**, puis **le modèle**.
 
-Onglet Voix, bas de page : la liste de tes enregistrements. Appuie sur
-« Écouter » sur l'un d'eux.
-
-**Attendu :** tu entends bien cette tentative-là.
+Dis-moi lesquels de ces trois sons tu entends, et lesquels manquent.
 
 ---
 
-## Ce qu'il faut me renvoyer
+# CE QU'IL FAUT ME RENVOYER
 
-Pour chaque étape : ✓ ou le problème exact.
+1. Les huit lignes de l'étape 1.
+2. Les six lignes de l'étape 2.
+3. Les treize lignes de l'étape 3, **et** si tu as entendu ta voix.
+4. Ce qui se passe à l'étape 4 : son, ou écran « Son bloqué ».
+5. Lesquels des trois sons de l'étape 5 tu entends.
 
-Pour l'étape 2, la liste complète des lignes ✕ avec leur texte.
+Avec ça, je saurai exactement où le son s'arrête.
 
-Pour l'étape 4, la réponse à une question : **est-ce que tu pourrais
-faire ça en conduisant ?**
+---
+
+# NOTES
+
+**Bluetooth.** Fais ce premier test sans Bluetooth, haut-parleur du
+téléphone. Le Bluetooth ajoute une variable qu'on traitera après.
+
+**Écran verrouillé.** Limite connue du navigateur : la synthèse
+s'arrête. Garde l'écran allumé.
+
+**Mode avion.** Une fois les cinq étapes faites, refais l'étape 4 en
+mode avion. Tout doit fonctionner à l'identique : aucun son ne dépend
+du réseau.

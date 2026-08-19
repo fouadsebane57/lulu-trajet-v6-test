@@ -25,7 +25,11 @@ echo "Archive : $DOSSIER.zip"
 unzip -l "$DOSSIER.zip" | tail -2
 
 echo
-echo "Contrôle : le fichier de configuration du noyau doit être présent."
-unzip -l "$DOSSIER.zip" | grep -q "$DOSSIER/src/core/config.js" \
-  && echo "  ok    src/core/config.js" \
-  || { echo "  ÉCHEC src/core/config.js absent de l'archive"; exit 1; }
+echo "Contrôle des fichiers sensibles à l'empaquetage :"
+for f in src/core/config.js src/audio/coordinateur.js src/audio/test-p0.js; do
+  if unzip -l "$DOSSIER.zip" | grep -q "$DOSSIER/$f"; then
+    echo "  ok    $f"
+  else
+    echo "  ÉCHEC $f absent de l'archive"; exit 1
+  fi
+done
